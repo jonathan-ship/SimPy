@@ -1,8 +1,5 @@
 import simpy
-import random
-import functools
 import time
-import os
 import pandas as pd
 import scipy.stats as st
 import matplotlib.pyplot as plt
