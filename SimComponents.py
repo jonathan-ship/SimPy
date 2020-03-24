@@ -1,14 +1,21 @@
-from collections import deque
+'''
+data type = "gen" -> generator // data type = "df" -> dataframe
+'''
+
+import simpy
+from collections import deque, OrderedDict
 
 
 class Part(object):
 
-    def __init__(self, time, data, id, total_data, src="a"):
+    def __init__(self, time, data, id, data_num, src="a"):
         self.time = time
         self.id = id
         self.src = src
-        self.data = data
-        self.total_data = total_data
+        self.data = data  # generator or dataframe에서 생성한 데이터
+        self.data_num = data_num  # generator 용
+        self.i = 0  ## 완료한 공정의 개수
+        # self.simulation_data = OrderedDict()  # master_plan에만 적용
 
     def __repr__(self):
         return "id: {}, src: {}, time: {}".format(self.id, self.src, self.time)
@@ -16,35 +23,48 @@ class Part(object):
 
 class Source(object):
 
-    def __init__(self, env, id, data):
-        self.id = id
+    def __init__(self, env, id, data_type, block_data, process_dict, data_num):
         self.env = env
-        self.data = data
-        self.parts_sent = 0
+        self.id = id
+        self.data_type = data_type  # "df" : dataframe / "gen" : generator
+        self.block_data = block_data  # "df" -> 전체 dataframe / "gen" -> generator 함수
+        self.process_dict = process_dict
+        self.data_num = data_num  # 전체 블록 갯수
+
         self.action = env.process(self.run())
-        self.out = None
+        self.parts_sent = 0
         self.flag = False
 
 
     def run(self):
         while True:
+            # data 받아오기
+            if self.data_type == "gen":
+                p = next(self.block_data)
+            else:
+                p = self.block_data.iloc[self.parts_sent]
+
+            # part 생성
+            part = Part(self.env.now, p, self.parts_sent, self.data_num, src=self.id)
+
+            # IAT
             if self.parts_sent != 0:
-                yield self.env.timeout(self.data.iloc[self.parts_sent, 0] - self.env.now)
+                yield self.env.timeout(part.data[(0, 'start_time')] - self.env.now)
 
-            part = Part(self.env.now, self.data.iloc[self.parts_sent], self.parts_sent, len(self.data), src=self.id)
-
-            if len(self.out.queue) + self.out.server_num - self.out.server.count(None) >= self.out.qlimit:
-                self.out.waiting.append(self.env.event())
-                yield self.out.waiting[-1]
+            # next process
+            idx = part.data[(part.i, 'process')]
+            if len(self.process_dict[idx].queue) + self.process_dict[idx].server_num - self.process_dict[idx].server.count(None) >= self.process_dict[idx].qlimit:
+                self.process_dict[idx].waiting.append(self.env.event())
+                yield self.process_dict[idx].waiting[-1]
 
             self.parts_sent += 1
-            self.out.put(part)
+            self.process_dict[idx].put(part)
 
-            if self.parts_sent == len(self.data):
+            if self.parts_sent == self.data_num:
                 print('all parts are sent')
                 break
 
-            if self.parts_sent == part.total_data:  # 해당 공정 종료
+            if self.parts_sent == self.data_num:  # 해당 공정 종료
                 self.flag = True
 
 
@@ -53,7 +73,7 @@ class Sink(object):
     def __init__(self, env, name, rec_lead_time=False, rec_arrivals=False, absolute_arrivals=False, selector=None):
         self.name = name
         self.env = env
-        self. rec_lead_time = rec_lead_time
+        self.rec_lead_time = rec_lead_time
         self.rec_arrivals = rec_arrivals
         self.absolute_arrivals = absolute_arrivals
         self.selector = selector
@@ -61,6 +81,7 @@ class Sink(object):
         self.arrivals = []
         self.parts_rec = 0
         self.last_arrival = 0.0
+        # self.block_project_sim = {}
 
     def put(self, part):
         if not self.selector or self.selector(part):
@@ -75,10 +96,12 @@ class Sink(object):
                 self.last_arrival = now
             self.parts_rec += 1
 
+            # self.block_project_sim[part.id] = part.simulation_data  # master_plan에만 적용
+
 
 class Process(object):
 
-    def __init__(self, env, name, server_num, qlimit=None):
+    def __init__(self, env, name, server_num, process_dict, qlimit=None):
         self.name = name
         self.env = env
         self.server_num = server_num
@@ -89,29 +112,38 @@ class Process(object):
         self.parts_sent = 0
         self.flag = False
         self.qlimit = qlimit
-        self.out = None
+        # self.out = None
         self.working_time = 0.0
         self.process_start = 0.0
         self.process_finish = 0.0
+        self.process_dict = process_dict
 
     def run(self, part, server_id):
         ## ??
         self.process_start = self.env.now if self.parts_rec == 0 else self.process_start
-
-        proc_time = part.data[(self.name, 'process_time')]
         start_time = self.env.now
+
+        proc_time = part.data[(part.i, 'process_time')]
         yield self.env.timeout(proc_time)
         self.working_time += self.env.now - start_time
 
-        if self.out.__class__.__name__ == 'Process':
-            lag = part.data[(self.out.name, 'start_time')] - self.env.now
+        # # master_plan에만 적용
+        # part.simulation_data[self.name] = [start_time]
+        # part.simulation_data[self.name].append(self.working_time)
+
+        # next process
+        next_process = part.data[(part.i + 1, 'process')]
+
+        if self.process_dict[next_process].__class__.__name__ == 'Process':
+            lag = part.data[(part.i + 1, 'start_time')] - self.env.now
             if lag > 0:
                 yield self.env.timeout(lag)
-            if len(self.out.queue) + (self.out.server_num - self.out.server.count(None)) >= self.out.qlimit:
-                self.out.waiting.append(self.env.event())
-                yield self.out.wait1[-1]
+            if len(self.process_dict[next_process].queue) + (self.process_dict[next_process].server_num - self.process_dict[next_process].server.count(None)) >= self.process_dict[next_process].qlimit:
+                self.process_dict[next_process].waiting.append(self.env.event())
+                yield self.process_dict[next_process].wait1[-1]
 
-        self.out.put(part)
+        self.process_dict[next_process].put(part)
+        part.i += 1
         self.parts_sent += 1
         self.process_finish = self.env.now  # part가 해당 공정에서 out된 시각
 
@@ -123,7 +155,7 @@ class Process(object):
         if len(self.queue) + (self.server_num - self.server.count(None)) < self.qlimit and len(self.waiting) > 0:
             self.waiting.popleft().succeed()
 
-        if self.parts_sent == part.total_data:  # 해당 공정 종료
+        if self.parts_sent == part.data_num:  # 해당 공정 종료
             self.flag = True
 
     def put(self, part):
