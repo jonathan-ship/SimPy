@@ -18,23 +18,28 @@ data['process2'] = data['process2'] + '_2'
 ## IAT
 # adist = functools.partial(random.randrange, 1, 10)
 IAT = st.expon.rvs(loc=28, scale=1, size=len(data))  # 첫 번째 공정의 작업시간의 평균 = 27.9
-IAT = IAT.cumsum()
+start_time = IAT.cumsum()
 
 # Source에 넣어 줄 dataframe
 columns = pd.MultiIndex.from_product([[0, 1, 2], ['start_time', 'process_time', 'process']])
 df = pd.DataFrame([], columns=columns)
-start_time = 0.0  # start time of process 1
 
-for i in range(len(data)):
-    temp = data.iloc[i]
-    df.loc[i] = [None for _ in range(len(df.columns))]
+# start_time
+df[(0, 'start_time')] = start_time
+df[(1, 'start_time')] = 0
+df[(2, 'start_time')] = None
 
-    ## Plan, Actual, Predicted 중 선택 가능
-    df.loc[i][0] = [IAT[i], data['Actual_makingLT'][i], data['process1'][i]]  # process 1
-    df.loc[i][1] = [0, data['Actual_paintingLT'][i], data['process2'][i]]  # process 2
-    df.loc[i][2] = [None, None, 'Sink']  # Sink
+# process_time - Plan, Actual, Predicted 중 선택
+df[(0, 'process_time')] = data['Actual_makingLT']
+df[(1, 'process_time')] = data['Actual_paintingLT']
+df[(2, 'process_time')] = None
 
+# process
+df[(0, 'process')] = data['process1']
+df[(1, 'process')] = data['process2']
+df[(2, 'process')] = 'Sink'
 
+# Simulation
 RUN_TIME = 45000
 
 env = simpy.Environment()
@@ -54,7 +59,6 @@ for i in range(len(process_list)):
     process_dict[process_list[i]] = process[i]
 
 process_dict['Sink'] = Sink
-
 
 start = time.time()
 env.run()
