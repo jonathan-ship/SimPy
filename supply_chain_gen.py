@@ -1,42 +1,36 @@
 import simpy
-import random
-import functools
 import time
-import os
 import pandas as pd
-from collections import OrderedDict
+import numpy as np
 import matplotlib.pyplot as plt
 from SimComponents import Source, Sink, Process, Monitor
+import scipy.stats as st
 
 start_0 = time.time()
 data_all = pd.read_excel('./data/spool_data_for_simulation.xlsx')
 data = data_all[['NO_SPOOL', '제작협력사', '도장협력사', "Plan_makingLT", "Actual_makingLT", "Predicted_makingLT",
                  "Plan_paintingLT", "Actual_paintingLT", "Predicted_paintingLT"]]
 
-df = pd.DataFrame()
-# df['part_no'] = data['NO_SPOOL']
-df['process1'] = data['제작협력사'] + '_1'
-df['process2'] = data['도장협력사'] + '_2'
-
-# process time : plan, actual, predicted로 변경 가능
-df['proc_time_1'] = data['Actual_makingLT']
-df['proc_time_2'] = data['Actual_paintingLT']
+data.rename(columns={'제작협력사': 'process1', '도장협력사': 'process2'}, inplace=True)
+data['process1'] = data['process1'] + '_1'
+data['process2'] = data['process2'] + '_2'
 
 ## IAT
-adist = functools.partial(random.randrange, 1, 10)
+# adist = functools.partial(random.randrange, 1, 10)
+IAT = st.expon.rvs(loc=28, scale=1, size=len(data))  # 첫 번째 공정의 작업시간의 평균 = 27.9
+start_time = IAT.cumsum()
 
 def generator(block_data):
-    start_time = 0
     for i in range(len(block_data)):
         srs = pd.Series()
         temp_block_data = block_data.iloc[i]
 
-        start_time += adist()
-        temp_series_1 = pd.Series([start_time, temp_block_data['proc_time_1'], temp_block_data['process1']],
+        ## process time : Plan_makingLT, Actual_makingLT, Predicted_makingLT 중 선택 가능
+        temp_series_1 = pd.Series([start_time[i], temp_block_data['Actual_makingLT'], temp_block_data['process1']],
                                   index=[[0, 0, 0], ['start_time', 'process_time', 'process']])
         srs = pd.concat([srs, temp_series_1])
 
-        temp_series_2 = pd.Series([start_time, temp_block_data['proc_time_2'], temp_block_data['process2']],
+        temp_series_2 = pd.Series([0, temp_block_data['Actual_paintingLT'], temp_block_data['process2']],
                                   index=[[1, 1, 1], ['start_time', 'process_time', 'process']])
         srs = pd.concat([srs, temp_series_2])
 
@@ -46,18 +40,18 @@ def generator(block_data):
         yield srs
 
 
-gen_block_data = generator(df)
+gen_block_data = generator(data)
 
 RUN_TIME = 45000
 
 env = simpy.Environment()
 
 process_dict = {}
-Source = Source(env, 'Source', gen_block_data, process_dict, len(df), data_type="gen")
+Source = Source(env, 'Source', gen_block_data, process_dict, len(data), data_type="gen")
 Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
 
-process_list = list(df.drop_duplicates(['process1'])['process1'])
-process_list += list(df.drop_duplicates(['process2'])['process2'])
+process_list = list(data.drop_duplicates(['process1'])['process1'])
+process_list += list(data.drop_duplicates(['process2'])['process2'])
 
 process = []
 for i in range(len(process_list)):
@@ -74,7 +68,7 @@ env.run()
 finish = time.time()
 
 print("total time ", finish - start_0)
-print("simulation time : ", finish - start)
+print("simulation execution time : ", finish - start)
 
 
 def utilization(activity):
