@@ -23,7 +23,7 @@ class Part(object):
 
 class Source(object):
 
-    def __init__(self, env, id, data_type, block_data, process_dict, data_num):
+    def __init__(self, env, id, block_data, process_dict, data_num, data_type=None):
         self.env = env
         self.id = id
         self.data_type = data_type  # "df" : dataframe / "gen" : generator
