@@ -10,11 +10,14 @@ from SimComponents import Sink, Process, Monitor, Source
 
 if __name__ == "__main__":
     start_0 = time.time()
+
     #data pre-processing
-    columns = pd.MultiIndex.from_product([[0, 1, 2], ['start_time', 'process_time', 'process']])
+    columns = pd.MultiIndex.from_product([[i for i in range(3)], ['start_time', 'process_time', 'process']])  # 3 = 공정 개수(2) + Sink
     data = pd.DataFrame([], columns=columns)
 
     blocks = 18000
+
+    ## Factory Physics 분포는 항상 양수이기 때문에 음수 처리 작업 불필요
 
     data[(0, 'start_time')] = st.expon.rvs(loc=25, scale=1, size=blocks)
     data[(0, 'start_time')] = data[(0, 'start_time')].cumsum()
@@ -33,19 +36,16 @@ if __name__ == "__main__":
     # modeling
     env = simpy.Environment()
 
-    WIP_graph = True
-    Throughput_graph = True
-    save_graph = True
+    WIP_graph = False
+    Throughput_graph = False
+    save_graph = False
 
     if save_graph:
         save_path = './data/factory physics'
         if not os.path.exists(save_path):
             os.makedirs(save_path)
 
-        # samp_dist = functools.partial(random.expovariate, 1) # need to be checked
-        samp_dist = 1
-
-        ## 기계 수 조정
+        ## 기계 수
         m_1 = 1
         m_2 = 1
 
@@ -73,6 +73,9 @@ if __name__ == "__main__":
 
         process_dict['Sink'] = Sink
 
+
+        # Monitor
+        samp_dist = 1
         Monitor1 = Monitor(env, process_dict['process1'], samp_dist)
         Monitor2 = Monitor(env, process_dict['process2'], samp_dist)
 
