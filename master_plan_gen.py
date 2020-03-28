@@ -40,9 +40,8 @@ for i in range(data_len):
 
 block2 = []  # 가공 후 블록 저장
 for block_code in block_list:
-    for_start = time.time()
     temp = data[data['BLOCKCODE'] == block_code]
-    temp_1 = temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=True)
+    temp_1 = temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=False)
     temp = temp_1.reset_index(drop=True)
 
     for i in range(0, len(temp) -1):
