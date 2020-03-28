@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import simpy
 from SimComponents import Source, Sink, Process, Monitor
 import time
@@ -46,8 +45,8 @@ idx = 0  # df에 저장된 block 개수
 for block_code in block_list:
     for_start = time.time()
     temp = data[data['BLOCKCODE'] == block_code]
-    temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=True)
-    temp = temp.reset_index(drop=True)
+    temp_1 = temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=False)
+    temp = temp_1.reset_index(drop=True)
     temp_list = []
     df.loc[idx] = [None for _ in range(len(df.columns))]
     n = 0  # 저장된 공정 개수
@@ -60,9 +59,9 @@ for block_code in block_list:
 
         if date1 > date2:  #후행공정이 선행공정 종료 전에 시작할 때
             if date1 > date3:  #후행공정이 선행공정에 포함될 때
-                temp['PLANDURATION'][i+1] = -1
+                temp.loc[i+1, 'PLANDURATION'] = -1
             else:
-                temp['PLANDURATION'][i+1] -= date2 - date1
+                temp.loc[i+1, 'PLANDURATION'] -= date2 - date1
 
         if temp['PLANDURATION'][i] > 0:
             df.loc[idx][n] = [temp['PLANSTARTDATE'][i], temp['PLANDURATION'][i], activity]
