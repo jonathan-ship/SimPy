@@ -42,8 +42,8 @@ block2 = []  # 가공 후 블록 저장
 for block_code in block_list:
     for_start = time.time()
     temp = data[data['BLOCKCODE'] == block_code]
-    temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=True)
-    temp = temp.reset_index(drop=True)
+    temp_1 = temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=True)
+    temp = temp_1.reset_index(drop=True)
 
     for i in range(0, len(temp) -1):
         date1 = temp['PLANSTARTDATE'][i] + temp['PLANDURATION'][i] - 1  #선행공정 종료날짜
@@ -52,9 +52,9 @@ for block_code in block_list:
 
         if date1 > date2:  #후행공정이 선행공정 종료 전에 시작할 때
             if date1 > date3:  #후행공정이 선행공정에 포함될 때
-                temp['PLANDURATION'][i+1] = -1
+                temp.loc[i+1, 'PLANDURATION'] = -1
             else:
-                temp['PLANDURATION'][i+1] -= date2 - date1
+                temp.loc[i+1, 'PLANDURATION'] -= date2 - date1
 
     temp = temp[temp['PLANDURATION'] >= 0]
     block2.append(temp)
