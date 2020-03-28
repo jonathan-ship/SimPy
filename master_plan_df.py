@@ -43,7 +43,6 @@ df = pd.DataFrame([], columns=columns)
 idx = 0  # df에 저장된 block 개수
 
 for block_code in block_list:
-    for_start = time.time()
     temp = data[data['BLOCKCODE'] == block_code]
     temp_1 = temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=False)
     temp = temp_1.reset_index(drop=True)
