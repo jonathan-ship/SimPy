@@ -8,10 +8,10 @@ import scipy.stats as st
 
 start_0 = time.time()
 data_all = pd.read_excel('./data/spool_data_for_simulation.xlsx')
-data = data_all[['NO_SPOOL', '제작협력사', '도장협력사', "Plan_makingLT", "Actual_makingLT", "Predicted_makingLT",
+data_all = data_all[['NO_SPOOL', '제작협력사', '도장협력사', "Plan_makingLT", "Actual_makingLT", "Predicted_makingLT",
                  "Plan_paintingLT", "Actual_paintingLT", "Predicted_paintingLT"]]
 
-data.rename(columns={'제작협력사': 'process1', '도장협력사': 'process2'}, inplace=True)
+data = data_all.rename(columns={'제작협력사': 'process1', '도장협력사': 'process2'}, inplace=False)
 data['process1'] = data['process1'] + '_1'
 data['process2'] = data['process2'] + '_2'
 
