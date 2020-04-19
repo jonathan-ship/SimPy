@@ -11,13 +11,17 @@ from SimComponents import Source, Sink, Process, Monitor
 
 if __name__ == '__main__':
     start_0 = time.time()
-    # data pre-processing
-    data_all = pd.read_csv('./data/block_transfer.csv')
-    data = data_all[["AAS_CAL", "AA_DATEDIF", "OAS_CAL", "OA_DATEDIF", "PAS_CAL", "PA_DATEDIF"]]
 
-    data["AAS_CAL"] = pd.to_datetime(data["AAS_CAL"], format='%Y-%m-%d')
-    data["OAS_CAL"] = pd.to_datetime(data["OAS_CAL"], format='%Y-%m-%d')
-    data["PAS_CAL"] = pd.to_datetime(data["PAS_CAL"], format='%Y-%m-%d')
+    # data pre-processing
+    data_all = pd.read_csv('./data/block_transfer.csv', dtype={'PROJ_NO': object})
+
+    data = pd.DataFrame()
+    data["AAS_CAL"] = pd.to_datetime(data_all["AAS_CAL"], format='%Y-%m-%d')
+    data["OAS_CAL"] = pd.to_datetime(data_all["OAS_CAL"], format='%Y-%m-%d')
+    data["PAS_CAL"] = pd.to_datetime(data_all["PAS_CAL"], format='%Y-%m-%d')
+    data["AA_DATEDIF"] = data_all["AA_DATEDIF"]
+    data["OA_DATEDIF"] = data_all["OA_DATEDIF"]
+    data["PA_DATEDIF"] = data_all["PA_DATEDIF"]
 
     data = data[data["AA_DATEDIF"] != 0]
     data = data[data["OA_DATEDIF"] != 0]
