@@ -59,6 +59,35 @@ class ArrivalRateAndThroughput(object):
         self.process_throughput = 1 / np.mean(TH_list)
 
 
+class Queue(object):
+
+    def __init__(self, data, process_list):
+        self.data = data
+        self.process_list = process_list
+        self.average_waiting_time_dict = {}
+        self.total_waiting_time_dict = {}
+
+    def waiting_time(self):
+        for process in self.process_list:
+            df_waiting_start = self.data["time"][
+                (self.data["process"] == process) & (self.data["event"] == "queue_entered")]
+            df_waiting_start = df_waiting_start.reset_index(drop=True)
+
+            df_waiting_finish = self.data["time"][
+                (self.data["process"] == process) & (self.data["event"] == "queue_released")]
+            df_waiting_finish = df_waiting_finish.reset_index(drop=True)
+
+            df_waiting_time = df_waiting_finish - df_waiting_start
+
+            self.average_waiting_time_dict[process] = np.mean(df_waiting_time)
+            self.total_waiting_time_dict[process] = np.sum(df_waiting_time)
+
+
+
+
+
+
+
 
 
 
