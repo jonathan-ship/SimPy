@@ -1,16 +1,19 @@
+import os
 import pandas as pd
+import numpy as np
 import simpy
-from SimComponents import Source, Sink, Process, Monitor
 import time
+from SimComponents import Source, Sink, Process
+from Postprocessing import Utilization, ArrivalRateAndThroughput, Queue
 
-## 코드 실행 시작
+# 코드 실행 시각
 start_0 = time.time()
 
-## data 받아오기
+# data 받아오기
 data_all = pd.read_excel('./data/MCM_ACTIVITY.xls')
 data = data_all[['PROJECTNO', 'ACTIVITYCODE', 'LOCATIONCODE', 'PLANSTARTDATE', 'PLANFINISHDATE', 'PLANDURATION']]
 
-## data pre-processing
+# DATA PRE-PROCESSING
 data = data[data['PLANSTARTDATE'].dt.year >= 2018]
 data = data[data['LOCATIONCODE'] != 'OOO']
 
@@ -21,21 +24,21 @@ data['PLANFINISHDATE'] = data['PLANFINISHDATE'].apply(lambda x: (x - initial_dat
 data['ACTIVITY'] = data['ACTIVITYCODE'].apply(lambda x: x[5:])
 data['BLOCKCODE'] = data['PROJECTNO'] + ' ' + data['LOCATIONCODE']
 
-data_len = len(data)
-
 process_list = list(data.drop_duplicates(['ACTIVITY'])['ACTIVITY'])
 block_list = list(data.drop_duplicates(['BLOCKCODE'])['BLOCKCODE'])
 
+df_part = pd.DataFrame(block_list, columns=["part"])
+
 
 # raw data 저장 - block1(list)
-'''
-block1 = p[
-for block_code in block_list:
-temp = data[data['BLOCKCODE'] == block_code]
-temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=True)
-temp = temp.reset_index(drop=True)
-block1.append(temp)
-'''
+# block1 = []
+# activity_num = []
+# for block_code in block_list:
+#     temp = data[data['BLOCKCODE'] == block_code]
+#     temp_1 = temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=False)
+#     temp = temp_1.reset_index(drop=True, inplace=False)
+#
+#     block1.append(temp)
 
 # S-Module에 넣어 줄 dataframe(중복된 작업시간 처리)
 columns = pd.MultiIndex.from_product([[i for i in range(13)], ['start_time', 'process_time', 'process']])  # 13 : 한 블록이 거치는 공정의 최대 개수(12) + Sink
@@ -78,21 +81,26 @@ for block_code in block_list:
 df.sort_values(by=[(0, 'start_time')], axis=0, inplace=True)
 df = df.reset_index(drop=True)
 
+df = pd.concat([df_part, df], axis=1)
 
-## Simulation
+# Modeling
 env = simpy.Environment()
 
+##
+event_tracer = {"event": [], "time": [], "part": [], "process": []}
 process_dict = {}
-
-Source = Source(env, 'Source', df, process_dict, len(df), data_type="df")
-Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
-
 process = []
+m_dict = {}
+
+# Source, Sink modeling
+Source = Source(env, 'Source', df, process_dict, len(df), event_tracer=event_tracer,data_type="df")
+Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
+# Process modeling
 for i in range(len(process_list)):
-    process.append(Process(env, process_list[i], 10, process_dict, 10000))
+    m_dict[process_list[i]] = 10
+    process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, event_tracer=event_tracer, qlimit=10000))
 for i in range(len(process_list)):
     process_dict[process_list[i]] = process[i]
-
 process_dict['Sink'] = Sink
 
 # Run it
@@ -111,3 +119,46 @@ print("total time : ", finish - start_0)
 
 # 총 리드타임 - 마지막 part가 Sink에 도달하는 시간
 print("Total Lead Time :", Sink.last_arrival)
+
+# save data
+save_path = './result'
+if not os.path.exists(save_path):
+    os.makedirs(save_path)
+
+# event tracer dataframe으로 변환
+df_event_tracer = pd.DataFrame(event_tracer)
+df_event_tracer.to_excel(save_path +'/event_master_plan.xlsx')
+
+# DATA POST-PROCESSING
+# Event Tracer을 이용한 후처리
+print('#' * 80)
+print("Data Post-Processing")
+print('#' * 80)
+
+# 가동율
+Utilization = Utilization(df_event_tracer, process_dict, process_list)
+Utilization.utilization()
+utilization = Utilization.u_dict
+
+for process in process_list:
+    print("utilization of {} : ".format(process), utilization[process])
+
+# Arrival rate, Throughput
+ArrivalRateAndThroughput = ArrivalRateAndThroughput(df_event_tracer, process_list)
+ArrivalRateAndThroughput.arrival_rate()
+ArrivalRateAndThroughput.throughput()
+arrival_rate = ArrivalRateAndThroughput.process_arrival_rate
+throughput = ArrivalRateAndThroughput.process_throughput
+
+print('#' * 80)
+print("Arrival rate : ", arrival_rate)
+print("Throughput : ", throughput)
+
+# process 별 평균 대기시간, 총 대기시간
+Queue = Queue(df_event_tracer, process_list)
+Queue.waiting_time()
+print('#' * 80)
+for process in process_list:
+    print("average waiting time of {} : ".format(process), Queue.average_waiting_time_dict[process])
+for process in process_list:
+    print("total waiting time of {} : ".format(process), Queue.total_waiting_time_dict[process])
