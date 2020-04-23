@@ -1,11 +1,12 @@
+import os
 import pandas as pd
 import numpy as np
 import scipy.stats as st
 import simpy
 import time
 
-from SimComponents import Source, Sink, Process, EventTracer
-from Postprocessing import Utilization, ArrivalRateAndThroughput
+from SimComponents import Source, Sink, Process
+from Postprocessing import Utilization, ArrivalRateAndThroughput, Queue
 
 
 if __name__ == '__main__':
@@ -20,10 +21,12 @@ if __name__ == '__main__':
     process_list = ["plate_weld", "saw_front", "turn_over", "saw_back", "longi_weld", "unit_assy", "sub_assy"]
 
     # DATA PRE-PROCESSING
+    # part 정보
     df_part = pd.DataFrame(data["product"])
     df_part = df_part.rename(columns={"product": "part"})
 
-    columns = pd.MultiIndex.from_product([[i for i in range(7)], ['start_time', 'process_time', 'process']])  # 7 = 공정 수 + Sink
+    # 작업 정보, 7 = 공정 수 + Sink
+    columns = pd.MultiIndex.from_product([[i for i in range(7)], ['start_time', 'process_time', 'process']])
     df = pd.DataFrame([], columns=columns)
 
     IAT = st.expon.rvs(loc=3, scale=1, size=len(data))
@@ -45,28 +48,27 @@ if __name__ == '__main__':
 
     df = pd.concat([df_part, df], axis=1)
 
-
-    # SIMULATION
+    # Modeling
     env = simpy.Environment()
 
+    ##
+    event_tracer = {"event": [], "time": [], "part": [], "process": []}
     process_dict = {}
-
-    Source = Source(env, 'Source', df, process_dict, len(df), data_type="df")
-    Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
-    EventTracer = EventTracer()
-
     process = []
     m_dict = {}
-    for i in range(len(process_list)):
-        process.append(Process(env, process_list[i], 1, process_dict, 10000))
 
+    # Source, Sink modeling
+    Source = Source(env, 'Source', df, process_dict, len(df), event_tracer=event_tracer, data_type="df")
+    Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
+    # process modeling
+    for i in range(len(process_list)):
+        m_dict[process_list[i]] = 1
+        process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, event_tracer=event_tracer, qlimit=2))
     for i in range(len(process_list)):
         process_dict[process_list[i]] = process[i]
-        m_dict[process_list[i]] = 1
-
     process_dict['Sink'] = Sink
-    process_dict['EventTracer'] = EventTracer
 
+    # Simulation
     start = time.time()
     env.run()
     finish = time.time()
@@ -83,39 +85,45 @@ if __name__ == '__main__':
     # 총 리드타임 - 마지막 part가 Sink에 도달하는 시간
     print("Total Lead Time :", Sink.last_arrival, "\n")
 
+    # save data
+    save_path = './result'
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    # event tracer dataframe으로 변환
+    df_event_tracer = pd.DataFrame(event_tracer)
+    df_event_tracer.to_excel(save_path +'/event_PBS.xlsx')
+
     # DATA POST-PROCESSING
     # Event Tracer을 이용한 후처리
-    part_list = list(data["product"])  # 후처리에 필요한 part name을 list에 저장
-    df_event_tracer = process_dict['EventTracer'].event_tracer  # event log가 기록된 DataFrame
-    df_event_tracer.to_excel('./data/event_PBS.xlsx')  # 엑셀로 출력
-
     print('#' * 80)
     print("Data Post-Processing")
     print('#' * 80)
 
-    # 가동률
-    Utilization = Utilization(df_event_tracer, m_dict, process_list)
+    # 가동율
+    Utilization = Utilization(df_event_tracer, process_dict, process_list)
     Utilization.utilization()
     utilization = Utilization.u_dict
 
     for process in process_list:
         print("utilization of {} : ".format(process), utilization[process])
 
+    # Arrival rate, Throughput
     ArrivalRateAndThroughput = ArrivalRateAndThroughput(df_event_tracer, process_list)
     ArrivalRateAndThroughput.arrival_rate()
     ArrivalRateAndThroughput.throughput()
     arrival_rate = ArrivalRateAndThroughput.process_arrival_rate
     throughput = ArrivalRateAndThroughput.process_throughput
 
+    print('#' * 80)
     print("Arrival rate : ", arrival_rate)
     print("Throughput : ", throughput)
 
-
-
-
-
-
-
-
-
-
+    # process 별 평균 대기시간, 총 대기시간
+    Queue = Queue(df_event_tracer, process_list)
+    Queue.waiting_time()
+    print('#' * 80)
+    for process in process_list:
+        print("average waiting time of {} : ".format(process), Queue.average_waiting_time_dict[process])
+    for process in process_list:
+        print("total waiting time of {} : ".format(process), Queue.total_waiting_time_dict[process])
