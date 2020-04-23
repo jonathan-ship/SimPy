@@ -13,9 +13,8 @@ start_0 = time.time()
 # DATA PRE-PROCESSING
 data_all = pd.read_csv('./data/block_transfer.csv', dtype={'PROJ_NO': object})
 
-df_part = pd.DataFrame(data_all["PROJ_NO"], columns=["part"])
-
 data = pd.DataFrame()
+data["part"] = data_all["PROJ_NO"] + '_' + data_all['BLK_NO']
 data["AAS_CAL"] = pd.to_datetime(data_all["AAS_CAL"], format='%Y-%m-%d')
 data["OAS_CAL"] = pd.to_datetime(data_all["OAS_CAL"], format='%Y-%m-%d')
 data["PAS_CAL"] = pd.to_datetime(data_all["PAS_CAL"], format='%Y-%m-%d')
@@ -44,6 +43,7 @@ start_time_list = ["AAS_CAL", "OAS_CAL", "PAS_CAL"]
 process_time_list = ["AA_DATEDIF", "OA_DATEDIF", "PA_DATEDIF"]
 
 # Source에 넣어 줄 dataframe
+df_part = data["part"]
 columns = pd.MultiIndex.from_product([[i for i in range(4)], ['start_time', 'process_time', 'process']])
 df = pd.DataFrame([], columns=columns)
 
@@ -71,7 +71,7 @@ m_pnt = 263
 m_dict = {'Assembly': m_assy, 'Outfitting': m_oft, 'Painting': m_pnt}
 
 # Source, Sink modeling
-Source = Source(env, 'Source', df, process_dict, len(data), event_tracer=event_tracer, data_type="df")
+Source = Source(env, 'Source', df, process_dict, len(df), event_tracer=event_tracer, data_type="df")
 Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
 # Process modeling
 for i in range(len(process_list)):
