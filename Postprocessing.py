@@ -4,22 +4,29 @@ import pandas as pd
 
 class Utilization(object):
 
-    def __init__(self, data, m_dict, process_list):
-        self.data = data
-        self.m_dict = m_dict
-        self.process_list = process_list
-        self.u_dict = {}
+    def __init__(self, data, process_dict, process_list):
+        self.data = data  # event tracer data
+        self.process_dict = process_dict  # 모델링 된 Process 객체가 저장된 dictionary
+        self.process_list = process_list  # 공정 이름이 저장된 list
+        self.u_dict = {}  # 공정 별 utilization을 저장 할 dictionary
 
     def utilization(self):
-        for process in self.process_list:
+        for process in self.process_list:  # process 마다 utilization 계산
+            # 공정에 관한 event 중 work_start인 event의 시간 저장 (총 시간 계산, working time 시간 계산 시 사용)
             work_start = self.data["time"][(self.data["process"] == process) & (self.data["event"] == "work_start")]
             work_start = work_start.reset_index(drop=True)
 
+            # 공정에 관한 event 중 part_transferred인 event의 시간 저장 (총 시간 계산)
+            part_transferred = self.data["time"][
+                (self.data["process"] == process) & (self.data["event"] == "part_transferred")]
+            part_transferred = part_transferred.reset_index(drop=True)
+
+            # 공정에 관한 event 중 work_finish인 event의 시간 저장 (working time 시간 계산 시 사용)
             work_finish = self.data["time"][(self.data["process"] == process) & (self.data["event"] == "work_finish")]
             work_finish = work_finish.reset_index(drop=True)
 
             # 총 가동 시간
-            total_time = (work_finish.loc[len(work_finish) - 1] - work_start.loc[0]) * (self.m_dict[process])
+            total_time = (part_transferred[len(part_transferred) - 1] - work_start[0]) * (self.process_dict[process].server_num)
 
             # 총 작업 시간
             df_working = work_finish - work_start
@@ -30,7 +37,7 @@ class Utilization(object):
 
 
 class ArrivalRateAndThroughput(object):
-
+### 수정 요망 - 시간에 따른 공정 별 arrival rate / throughput 계산
     def __init__(self, data, process_list):
         self.data = data
         self.process_list = process_list
@@ -81,14 +88,3 @@ class Queue(object):
 
             self.average_waiting_time_dict[process] = np.mean(df_waiting_time)
             self.total_waiting_time_dict[process] = np.sum(df_waiting_time)
-
-
-
-
-
-
-
-
-
-
-
