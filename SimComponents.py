@@ -64,11 +64,11 @@ class Source(object):
 
                 yield self.process_dict[idx].waiting[-1]
 
+            # record: part_transferred
+            self.record(self.env.now, part.id, self.name, event="part_transferred")
             # part_transferred
             self.parts_sent += 1
             self.process_dict[idx].put(part)
-            # record: part_transferred
-            self.record(self.env.now, part.id, self.name, event="part_transferred")
 
             if self.parts_sent == self.data_num:
                 print('all parts are sent')
@@ -127,19 +127,13 @@ class Process(object):
         self.parts_rec = 0
         self.parts_sent = 0
         self.flag = False
-        self.working_time = 0.0
-        self.process_start = 0.0
-        self.process_finish = 0.0
 
     def run(self, part, server_id):
-        self.process_start = self.env.now if self.parts_rec == 0 else self.process_start
-        start_time = self.env.now
         # record: work_start
         self.record(self.env.now, part.id, self.name, event="work_start")
-
+        # work start
         proc_time = part.data[(part.i, 'process_time')]
         yield self.env.timeout(proc_time)
-        self.working_time += self.env.now - start_time
 
         # record: work_finish
         self.record(self.env.now, part.id, self.name, event="work_finish")
@@ -161,15 +155,12 @@ class Process(object):
 
                 yield self.process_dict[next_process].waiting[-1]
 
-        # part_transferred
-        self.process_dict[next_process].put(part)
         # record: part_transferred
         self.record(self.env.now, part.id, self.name, event="part_transferred")
-
-        # 공정 종료
+        # part_transferred
+        self.process_dict[next_process].put(part)
         part.i += 1
         self.parts_sent += 1
-        self.process_finish = self.env.now  # part가 해당 공정에서 out된 시각
 
         if len(self.queue) > 0:
             part = self.queue.popleft()
@@ -185,7 +176,7 @@ class Process(object):
             # record: delay_finish
             pre_process = part.data[(part.i - 1, 'process')] if part.i > 0 else 'Source'
             self.record(self.env.now, None, pre_process, event="delay_finish")
-
+            
         if self.parts_sent == part.data_num:  # 해당 공정 종료
             self.flag = True
 
