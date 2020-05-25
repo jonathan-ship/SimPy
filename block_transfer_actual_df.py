@@ -2,17 +2,17 @@ import simpy
 import time
 import os
 import pandas as pd
-import numpy as np
 
 from SimComponents import Source, Sink, Process
-from Postprocessing import Utilization, ArrivalRateAndThroughput, Queue
+from Postprocessing import Utilization, Queue
 
 # 코드 실행 시작 시각
 start_0 = time.time()
 
-# DATA PRE-PROCESSING
+# DATA INPUT
 data_all = pd.read_csv('./data/block_transfer.csv', dtype={'PROJ_NO': object})
 
+# DATA PRE-PROCESSING
 data = pd.DataFrame()
 data["part"] = data_all["PROJ_NO"] + '_' + data_all['BLK_NO']
 data["AAS_CAL"] = pd.to_datetime(data_all["AAS_CAL"], format='%Y-%m-%d')
@@ -81,9 +81,9 @@ for i in range(len(process_list)):
 process_dict['Sink'] = Sink
 
 # Run it
-start = time.time()
+start = time.time()  # 시뮬레이션 시작 시각
 env.run()
-finish = time.time()
+finish = time.time()  # 시뮬레이션 종료 시각
 
 print('#' * 80)
 print("Results of simulation")
@@ -120,17 +120,6 @@ utilization = Utilization.u_dict
 for process in process_list:
     print("utilization of {} : ".format(process), utilization[process])
 
-# Arrival rate, Throughput
-ArrivalRateAndThroughput = ArrivalRateAndThroughput(df_event_tracer, process_list)
-ArrivalRateAndThroughput.arrival_rate()
-ArrivalRateAndThroughput.throughput()
-arrival_rate = ArrivalRateAndThroughput.process_arrival_rate
-throughput = ArrivalRateAndThroughput.process_throughput
-
-print('#' * 80)
-print("Arrival rate : ", arrival_rate)
-print("Throughput : ", throughput)
-
 # process 별 평균 대기시간, 총 대기시간
 Queue = Queue(df_event_tracer, process_list)
 Queue.waiting_time()
@@ -139,69 +128,3 @@ for process in process_list:
     print("average waiting time of {} : ".format(process), Queue.average_waiting_time_dict[process])
 for process in process_list:
     print("total waiting time of {} : ".format(process), Queue.total_waiting_time_dict[process])
-
-# throughput and arrival_rate
-# if Throughput_graph:
-#     smoothing = 1000
-#     throughput_assy = pd.Series(Monitor1.throughput).rolling(window=smoothing, min_periods=1).mean()
-#     throughput_oft = pd.Series(Monitor2.throughput).rolling(window=smoothing, min_periods=1).mean()
-#     throughput_pnt = pd.Series(Monitor3.throughput).rolling(window=smoothing, min_periods=1).mean()
-#     arrival_rate_assy = pd.Series(Monitor1.arrival_rate).rolling(window=smoothing, min_periods=1).mean()
-#     arrival_rate_oft = pd.Series(Monitor2.arrival_rate).rolling(window=smoothing, min_periods=1).mean()
-#     arrival_rate_pnt = pd.Series(Monitor3.arrival_rate).rolling(window=smoothing, min_periods=1).mean()
-#
-#     fig, ax = plt.subplots(3, 1, squeeze=False)
-#
-#     ax[0][0].plot(Monitor1.time, arrival_rate_assy, label='arrival_rate')
-#     ax[0][0].plot(Monitor1.time, throughput_assy, label='throughput')
-#     ax[1][0].plot(Monitor2.time, arrival_rate_oft, label='arrival_rate')
-#     ax[1][0].plot(Monitor2.time, throughput_oft, label='throughput')
-#     ax[2][0].plot(Monitor3.time, arrival_rate_pnt, label='arrival_rate')
-#     ax[2][0].plot(Monitor3.time, throughput_pnt, label='throughput')
-#
-#     ax[0][0].set_xlabel('time[day]')
-#     ax[0][0].set_ylabel('rate[EA/day]')
-#     ax[1][0].set_xlabel('time[day]')
-#     ax[1][0].set_ylabel('rate[EA/day]')
-#     ax[2][0].set_xlabel('time[day]')
-#     ax[2][0].set_ylabel('rate[EA/day]')
-#
-#     ax[0][0].set_title("Arrival_rate/Throughput - {0}".format(Monitor1.port.name))
-#     ax[1][0].set_title("Arrival_rate/Throughput - {0}".format(Monitor2.port.name))
-#     ax[2][0].set_title("Arrival_rate/Throughput - {0}".format(Monitor3.port.name))
-#
-#     plt.legend()
-#     plt.tight_layout()
-#     plt.show()
-#
-#     if save_graph:
-#         fig.savefig(save_path + '/ArrivalRate_Throughput.png')
-#
-# # WIP and m
-# if WIP_graph:
-#     fig, ax = plt.subplots(3, 1, squeeze=False)
-#
-#     ax[0][0].plot(Monitor1.time, Monitor1.WIP, label='WIP')
-#     ax[0][0].plot(Monitor1.time, Monitor1.M, label='m')
-#     ax[1][0].plot(Monitor2.time, Monitor2.WIP, label='WIP')
-#     ax[1][0].plot(Monitor2.time, Monitor2.M, label='m')
-#     ax[2][0].plot(Monitor3.time, Monitor3.WIP, label='WIP')
-#     ax[2][0].plot(Monitor3.time, Monitor3.M, label='m')
-#
-#     ax[0][0].set_xlabel('time[day]')
-#     ax[0][0].set_ylabel('num')
-#     ax[1][0].set_xlabel('time[day]')
-#     ax[1][0].set_ylabel('num')
-#     ax[2][0].set_xlabel('time[day]')
-#     ax[2][0].set_ylabel('num')
-#
-#     ax[0][0].set_title("WIP/m - {0}".format(Monitor1.port.name))
-#     ax[1][0].set_title("WIP/m - {0}".format(Monitor2.port.name))
-#     ax[2][0].set_title("WIP/m - {0}".format(Monitor3.port.name))
-#
-#     plt.legend()
-#     plt.tight_layout()
-#     plt.show()
-#
-#     if save_graph:
-#         fig.savefig(save_path + '/WIP_m.png')
