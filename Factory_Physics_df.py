@@ -2,171 +2,109 @@ import simpy
 import time
 import os
 import scipy.stats as st
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from SimComponents import Sink, Process, Monitor, Source
 
+from SimComponents import Sink, Process, Source
+from Postprocessing import Utilization, Queue
 
-if __name__ == "__main__":
-    start_0 = time.time()
+# 코드 실행 시작 시각
+start_0 = time.time()
 
-    #data pre-processing
-    columns = pd.MultiIndex.from_product([[i for i in range(3)], ['start_time', 'process_time', 'process']])  # 3 = 공정 개수(2) + Sink
-    data = pd.DataFrame([], columns=columns)
+# DATA PRE-PROCESSING
+blocks = 18000  # 블록 수
+df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
 
-    blocks = 18000
+process_list = ['process1', 'process2']
+columns = pd.MultiIndex.from_product([[i for i in range(len(process_list)+1)], ['start_time', 'process_time', 'process']])
+data = pd.DataFrame([], columns=columns)
 
-    ## Factory Physics 분포는 항상 양수이기 때문에 음수 처리 작업 불필요
+# process 1
+data[(0, 'start_time')] = st.expon.rvs(loc=25, scale=1, size=blocks)
+data[(0, 'start_time')] = data[(0, 'start_time')].cumsum()
+data[(0, 'process_time')] = st.gamma.rvs(a=0.16, loc=0, scale=137.5, size=blocks)
+data[(0, 'process')] = 'process1'
 
-    data[(0, 'start_time')] = st.expon.rvs(loc=25, scale=1, size=blocks)
-    data[(0, 'start_time')] = data[(0, 'start_time')].cumsum()
-    data[(0, 'process_time')] = st.gamma.rvs(a=0.16, loc=0, scale=137.5, size=blocks)
-    data[(0, 'process')] = 'process1'
+# process 2
+data[(1, 'start_time')] = 0
+data[(1, 'process_time')] = st.gamma.rvs(a=1, loc=0, scale=23, size=blocks)
+data[(1, 'process')] = 'process2'
 
-    data[(1, 'start_time')] = 0
-    data[(1, 'process_time')] = st.gamma.rvs(a=1, loc=0, scale=23, size=blocks)
-    data[(1, 'process')] = 'process2'
+# Sink
+data[(2, 'start_time')] = None
+data[(2, 'process_time')] = None
+data[(2, 'process')] = 'Sink'
 
-    data[(2, 'start_time')] = None
-    data[(2, 'process_time')] = None
-    data[(2, 'process')] = 'Sink'
+data = pd.concat([df_part, data], axis=1)
 
+# Modeling
+env = simpy.Environment()
 
-    # modeling
-    env = simpy.Environment()
+##
+event_tracer = {"event": [], "time": [], "part": [], "process": []}
+process_dict = {}
+process = []
 
-    WIP_graph = False
-    Throughput_graph = False
-    save_graph = False
+# 기계 수
+m_1 = 1
+m_2 = 1
+m_dict = {'process1': m_1, 'process2': m_2}
 
-    if save_graph:
-        save_path = './data/factory physics'
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
+# Source, Sink modeling
+Source = Source(env, 'Source', data, process_dict, blocks, event_tracer=event_tracer, data_type="df")
+Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
 
-        ## 기계 수
-        m_1 = 1
-        m_2 = 1
+# Process modeling
+for i in range(len(process_list)):
+    process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, event_tracer=event_tracer, qlimit=10000))
+for i in range(len(process_list)):
+    process_dict[process_list[i]] = process[i]
+process_dict['Sink'] = Sink
 
-        m_dict = {'process1': m_1, 'process2': m_2}
+# Run it
+start = time.time()
+env.run()
+finish = time.time()
 
-        process_dict = {}
+print('#' * 80)
+print("Results of simulation")
+print('#' * 80)
 
-        # modeling
-        env = simpy.Environment()
-        Source = Source(env, 'Source', data, process_dict, blocks, data_type="df")
-        Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
+# 코드 실행 시간
+print("data pre-processing : ", start - start_0)  # 시뮬레이션 시작 시각
+print("total time : ", finish - start_0)
+print("simulation execution time :", finish - start)  # 시뮬레이션 종료 시각
 
-        process_list = ['process1', 'process2']
+# 총 리드타임 - 마지막 part가 Sink에 도달하는 시간
+print("Total Lead Time :", Sink.last_arrival)
 
-        process = []
-        monitor = []
-        monitor_dict = {}
+# save data
+save_path = './result'
+if not os.path.exists(save_path):
+    os.makedirs(save_path)
 
-        ## Process 할당
-        for i in range(len(process_list)):
-            process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, 10000))
+# event tracer dataframe으로 변환
+df_event_tracer = pd.DataFrame(event_tracer)
+df_event_tracer.to_excel(save_path + '/event_Factory_Physics.xlsx')
 
-        for i in range(len(process_list)):
-            process_dict[process_list[i]] = process[i]
+# DATA POST-PROCESSING
+# Event Tracer을 이용한 후처리
+print('#' * 80)
+print("Data Post-Processing")
+print('#' * 80)
 
-        process_dict['Sink'] = Sink
+# 가동율
+Utilization = Utilization(df_event_tracer, process_dict, process_list)
+Utilization.utilization()
+utilization = Utilization.u_dict
 
+for process in process_list:
+    print("utilization of {} : ".format(process), utilization[process])
 
-        # Monitor
-        samp_dist = 1
-        Monitor1 = Monitor(env, process_dict['process1'], samp_dist)
-        Monitor2 = Monitor(env, process_dict['process2'], samp_dist)
-
-        # Run it
-        start = time.time()
-        env.run()
-        finish = time.time()
-
-        print('#' * 80)
-        print("Results of simulation")
-        print('#' * 80)
-
-        # 코드 실행 시간
-        print("data pre-processing : ", start - start_0)
-        print("total time : ", finish - start_0)
-        print("simulation execution time :", finish - start)
-
-        # 총 리드타임 - 마지막 part가 Sink에 도달하는 시간
-        print("Total Lead Time :", Sink.last_arrival)
-
-
-        # 가동률
-        def utilization(activity):
-            temp_process = process_dict[activity]
-            total_time = (temp_process.process_finish - temp_process.process_start) * temp_process.server_num
-            total_working = temp_process.working_time
-            u = total_working / total_time
-
-            return u
-
-
-        for process in process_list:
-            print('utilization of {} : '.format(process), utilization(process))
-
-        # 가동률
-        print('Process 1 : ', np.mean(Monitor1.WIP))
-        print('Process 2 : ', np.mean(Monitor2.WIP))
-        print(np.mean(Monitor1.arrival_rate))
-
-        # throughput and arrival_rate
-        '''if Throughput_graph:
-            smoothing = 1000
-            throughput_1 = pd.Series(Monitor1.throughput).rolling(window=smoothing, min_periods=1).mean()
-            throughput_2 = pd.Series(Monitor2.throughput).rolling(window=smoothing, min_periods=1).mean()
-            arrival_rate_1 = pd.Series(Monitor1.arrival_rate).rolling(window=smoothing, min_periods=1).mean()
-            arrival_rate_2 = pd.Series(Monitor2.arrival_rate).rolling(window=smoothing, min_periods=1).mean()
-
-            fig, ax = plt.subplots(2, 1, squeeze=False)
-
-            ax[0][0].plot(Monitor1.time, arrival_rate_1, label='arrival_rate')
-            ax[0][0].plot(Monitor1.time, throughput_1, label='throughput')
-            ax[1][0].plot(Monitor2.time, arrival_rate_2, label='arrival_rate')
-            ax[1][0].plot(Monitor2.time, throughput_2, label='throughput')
-
-
-            ax[0][0].set_xlabel('time[day]')
-            ax[0][0].set_ylabel('rate[EA/day]')
-            ax[1][0].set_xlabel('time[day]')
-            ax[1][0].set_ylabel('rate[EA/day]')
-
-
-            ax[0][0].set_title("Arrival_rate/Troughput - {0}".format(Monitor1.port.name))
-            ax[1][0].set_title("Arrival_rate/Troughput - {0}".format(Monitor2.port.name))
-
-            plt.legend()
-            plt.tight_layout()
-            plt.show()
-
-            if save_graph:
-                fig.savefig(save_path + '/ArrivalRate_Troughput.png')'''
-
-        # WIP and m
-        '''if WIP_graph:
-            fig, ax = plt.subplots(2, 1, squeeze=False)
-
-            ax[0][0].plot(Monitor1.time, Monitor1.WIP, label='WIP')
-            ax[0][0].plot(Monitor1.time, Monitor1.M, label='m')
-            ax[1][0].plot(Monitor2.time, Monitor2.WIP, label='WIP')
-            ax[1][0].plot(Monitor2.time, Monitor2.M, label='m')
-
-            ax[0][0].set_xlabel('time[day]')
-            ax[0][0].set_ylabel('num')
-            ax[1][0].set_xlabel('time[day]')
-            ax[1][0].set_ylabel('num')
-
-            ax[0][0].set_title("WIP/m - {0}".format(Monitor1.port.name))
-            ax[1][0].set_title("WIP/m - {0}".format(Monitor2.port.name))
-
-            plt.legend()
-            plt.tight_layout()
-            plt.show()
-
-            if save_graph:
-                fig.savefig(save_path + '/WIP_m.png')'''
+# process 별 평균 대기시간, 총 대기시간
+Queue = Queue(df_event_tracer, process_list)
+Queue.waiting_time()
+print('#' * 80)
+for process in process_list:
+    print("average waiting time of {} : ".format(process), Queue.average_waiting_time_dict[process])
+for process in process_list:
+    print("total waiting time of {} : ".format(process), Queue.total_waiting_time_dict[process])
