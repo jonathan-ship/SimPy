@@ -3,13 +3,14 @@ import simpy
 import time
 import pandas as pd
 import scipy.stats as st
+
 from SimComponents import Source, Sink, Process
-from Postprocessing import Utilization, ArrivalRateAndThroughput, Queue
+from Postprocessing import Utilization, Queue
 
 # 코드 실행 시작 시각
 start_0 = time.time()
 
-# data 받아오기
+# DATA INPUT
 data_all = pd.read_excel('./data/spool_data_for_simulation.xlsx')
 data_all = data_all[['NO_SPOOL', '제작협력사', '도장협력사', "Plan_makingLT", "Actual_makingLT", "Predicted_makingLT",
                  "Plan_paintingLT", "Actual_paintingLT", "Predicted_paintingLT"]]
@@ -61,6 +62,7 @@ m_dict = {}
 # Source, Sink modeling
 Source = Source(env, 'Source', df, process_dict, len(df), event_tracer=event_tracer, data_type="df")
 Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
+
 # Process modeling
 for i in range(len(process_list)):
     m_dict[process_list[i]] = 1
@@ -70,9 +72,9 @@ for i in range(len(process_list)):
 process_dict['Sink'] = Sink
 
 # Simulation
-start = time.time()
+start = time.time()  # 시뮬레이션 실행 시작 시각
 env.run()
-finish = time.time()
+finish = time.time()  # 시뮬레이션 실행 종료 시각
 
 print('#' * 80)
 print("Results of simulation")
@@ -93,7 +95,7 @@ if not os.path.exists(save_path):
 
 # event tracer dataframe으로 변환
 df_event_tracer = pd.DataFrame(event_tracer)
-df_event_tracer.to_excel(save_path +'/event_supply_chain.xlsx')
+df_event_tracer.to_excel(save_path + '/event_supply_chain.xlsx')
 
 # DATA POST-PROCESSING
 # Event Tracer을 이용한 후처리
@@ -108,17 +110,6 @@ utilization = Utilization.u_dict
 
 for process in process_list:
     print("utilization of {} : ".format(process), utilization[process])
-
-# Arrival rate, Throughput
-ArrivalRateAndThroughput = ArrivalRateAndThroughput(df_event_tracer, process_list)
-ArrivalRateAndThroughput.arrival_rate()
-ArrivalRateAndThroughput.throughput()
-arrival_rate = ArrivalRateAndThroughput.process_arrival_rate
-throughput = ArrivalRateAndThroughput.process_throughput
-
-print('#' * 80)
-print("Arrival rate : ", arrival_rate)
-print("Throughput : ", throughput)
 
 # process 별 평균 대기시간, 총 대기시간
 Queue = Queue(df_event_tracer, process_list)
