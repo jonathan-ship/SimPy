@@ -1,15 +1,15 @@
 import os
 import pandas as pd
-import numpy as np
 import simpy
 import time
+
 from SimComponents import Source, Sink, Process
-from Postprocessing import Utilization, ArrivalRateAndThroughput, Queue
+from Postprocessing import Utilization, Queue
 
 # 코드 실행 시각
 start_0 = time.time()
 
-# data 받아오기
+# DATA INPUT
 data_all = pd.read_excel('./data/MCM_ACTIVITY.xls')
 data = data_all[['PROJECTNO', 'ACTIVITYCODE', 'LOCATIONCODE', 'PLANSTARTDATE', 'PLANFINISHDATE', 'PLANDURATION']]
 
@@ -29,7 +29,6 @@ block_list = list(data.drop_duplicates(['BLOCKCODE'])['BLOCKCODE'])
 
 df_part = pd.DataFrame(block_list, columns=["part"])
 
-
 # raw data 저장 - block1(list)
 # block1 = []
 # activity_num = []
@@ -41,7 +40,8 @@ df_part = pd.DataFrame(block_list, columns=["part"])
 #     block1.append(temp)
 
 # S-Module에 넣어 줄 dataframe(중복된 작업시간 처리)
-columns = pd.MultiIndex.from_product([[i for i in range(13)], ['start_time', 'process_time', 'process']])  # 13 : 한 블록이 거치는 공정의 최대 개수(12) + Sink
+# 13 : 한 블록이 거치는 공정의 최대 개수(12) + Sink
+columns = pd.MultiIndex.from_product([[i for i in range(13)], ['start_time', 'process_time', 'process']])
 df = pd.DataFrame([], columns=columns)
 idx = 0  # df에 저장된 block 개수
 
@@ -59,8 +59,8 @@ for block_code in block_list:
         date2 = temp['PLANSTARTDATE'][i+1]  # 후행공정 시작날짜
         date3 = temp['PLANFINISHDATE'][i+1]  # 후행공정 종료날짜
 
-        if date1 > date2:  #후행공정이 선행공정 종료 전에 시작할 때
-            if date1 > date3:  #후행공정이 선행공정에 포함될 때
+        if date1 > date2:  # 후행공정이 선행공정 종료 전에 시작할 때
+            if date1 > date3:  # 후행공정이 선행공정에 포함될 때
                 temp.loc[i+1, 'PLANDURATION'] = -1
             else:
                 temp.loc[i+1, 'PLANDURATION'] -= date2 - date1
@@ -95,6 +95,7 @@ m_dict = {}
 # Source, Sink modeling
 Source = Source(env, 'Source', df, process_dict, len(df), event_tracer=event_tracer,data_type="df")
 Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
+
 # Process modeling
 for i in range(len(process_list)):
     m_dict[process_list[i]] = 10
@@ -104,9 +105,9 @@ for i in range(len(process_list)):
 process_dict['Sink'] = Sink
 
 # Run it
-start = time.time()
+start = time.time()  # 시뮬레이션 시작 시각
 env.run()
-finish = time.time()
+finish = time.time()  # 시뮬레이션 종료 시각
 
 print('#' * 80)
 print("Results of simulation")
@@ -142,17 +143,6 @@ utilization = Utilization.u_dict
 
 for process in process_list:
     print("utilization of {} : ".format(process), utilization[process])
-
-# Arrival rate, Throughput
-ArrivalRateAndThroughput = ArrivalRateAndThroughput(df_event_tracer, process_list)
-ArrivalRateAndThroughput.arrival_rate()
-ArrivalRateAndThroughput.throughput()
-arrival_rate = ArrivalRateAndThroughput.process_arrival_rate
-throughput = ArrivalRateAndThroughput.process_throughput
-
-print('#' * 80)
-print("Arrival rate : ", arrival_rate)
-print("Throughput : ", throughput)
 
 # process 별 평균 대기시간, 총 대기시간
 Queue = Queue(df_event_tracer, process_list)
