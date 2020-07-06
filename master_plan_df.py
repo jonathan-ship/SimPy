@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import simpy
 import time
+import random
 
 from SimComponents import Source, Sink, Process
 from Postprocessing import Utilization, Queue
@@ -98,8 +99,10 @@ Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
 
 # Process modeling
 for i in range(len(process_list)):
-    m_dict[process_list[i]] = 10
-    process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, event_tracer=event_tracer, qlimit=10000))
+    # 각 공정의 작업장 수 1~10
+    m_dict[process_list[i]] = random.randrange(1, 11)
+    # qlimit 5 / 10 바꿔가면서 run 해볼 것 / run 할 때마다 event tracer 파일 새로 생성됨
+    process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, event_tracer=event_tracer, qlimit=10))
 for i in range(len(process_list)):
     process_dict[process_list[i]] = process[i]
 process_dict['Sink'] = Sink
@@ -136,19 +139,10 @@ print('#' * 80)
 print("Data Post-Processing")
 print('#' * 80)
 
-# 가동율
-Utilization = Utilization(df_event_tracer, process_dict, process_list)
-Utilization.utilization()
-utilization = Utilization.u_dict
-
-for process in process_list:
-    print("utilization of {} : ".format(process), utilization[process])
-
-# process 별 평균 대기시간, 총 대기시간
-Queue = Queue(df_event_tracer, process_list)
-Queue.waiting_time()
-print('#' * 80)
-for process in process_list:
-    print("average waiting time of {} : ".format(process), Queue.average_waiting_time_dict[process])
-for process in process_list:
-    print("total waiting time of {} : ".format(process), Queue.total_waiting_time_dict[process])
+# UTILIZATION
+# Utilization = Utilization(df_event_tracer, process_dict, process_list)
+# Utilization.utilization()
+# utilization = Utilization.u_dict
+#
+# for process in process_list:
+#     print("utilization of {} : ".format(process), utilization[process])
