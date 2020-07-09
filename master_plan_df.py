@@ -100,7 +100,7 @@ Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
 # Process modeling
 for i in range(len(process_list)):
     # 각 공정의 작업장 수 1~10
-    m_dict[process_list[i]] = random.randrange(1, 11)
+    m_dict[process_list[i]] = random.randrange(1, 6)
     # qlimit 5 / 10 바꿔가면서 run 해볼 것 / run 할 때마다 event tracer 파일 새로 생성됨
     process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, event_tracer=event_tracer, qlimit=10))
 for i in range(len(process_list)):
