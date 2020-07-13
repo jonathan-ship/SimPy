@@ -6,29 +6,27 @@ import simpy
 from collections import deque
 import pandas as pd
 
+EVENT_TRACER = {"event": [], "time": [], "part": [], "process": []}
+
 
 class Part(object):
 
-    def __init__(self, time, data, id, data_num):
-        self.time = time
+    def __init__(self, data, id, data_num):
         self.data = data
         self.id = id
         self.data_num = data_num
         self.i = 0
 
-    def __repr__(self):
-        return "id: {}, time: {}".format(self.id, self.time)
-
 
 class Source(object):
 
-    def __init__(self, env, name, block_data, process_dict, data_num, event_tracer=None, data_type=None):
+    def __init__(self, env, name, block_data, process_dict, data_num, data_type=None):
         self.env = env
         self.name = name
         self.block_data = block_data  # "df" -> 전체 dataframe / "gen" -> generator 함수
         self.process_dict = process_dict
         self.data_num = data_num  # 전체 블록 갯수
-        self.event_tracer = event_tracer
+        # self.event_tracer = event_tracer
         self.data_type = data_type  # "df" : dataframe / "gen" : generator
 
         self.action = env.process(self.run())
@@ -57,7 +55,8 @@ class Source(object):
 
             # next process
             idx = part.data[(part.i, 'process')]
-            if len(self.process_dict[idx].queue) + self.process_dict[idx].server_num - self.process_dict[idx].server.count(None) >= self.process_dict[idx].qlimit:
+            if len(self.process_dict[idx].queue) + self.process_dict[idx].server_num - self.process_dict[
+                idx].server.count(None) >= self.process_dict[idx].qlimit:
                 self.process_dict[idx].waiting.append(self.env.event())
                 # record: delay_start
                 self.record(self.env.now, None, self.name, event="delay_start")
@@ -78,10 +77,10 @@ class Source(object):
                 self.flag = True
 
     def record(self, time, part, process, event=None):
-        self.event_tracer["event"].append(event)
-        self.event_tracer["time"].append(time)
-        self.event_tracer["part"].append(part)
-        self.event_tracer["process"].append(process)
+        EVENT_TRACER["event"].append(event)
+        EVENT_TRACER["time"].append(time)
+        EVENT_TRACER["part"].append(part)
+        EVENT_TRACER["process"].append(process)
 
 
 class Sink(object):
@@ -113,12 +112,11 @@ class Sink(object):
 
 class Process(object):
 
-    def __init__(self, env, name, server_num, process_dict, event_tracer=None, qlimit=None):
+    def __init__(self, env, name, server_num, process_dict, qlimit=None):
         self.name = name
         self.env = env
         self.server_num = server_num
         self.process_dict = process_dict
-        self.event_tracer = event_tracer
         self.qlimit = qlimit
 
         self.server = [None for _ in range(server_num)]
@@ -148,7 +146,9 @@ class Process(object):
                 yield self.env.timeout(lag)
 
             # 대기 event 발생
-            if len(self.process_dict[next_process].queue) + (self.process_dict[next_process].server_num - self.process_dict[next_process].server.count(None)) >= self.process_dict[next_process].qlimit:
+            if len(self.process_dict[next_process].queue) + (
+                    self.process_dict[next_process].server_num - self.process_dict[next_process].server.count(None)) >= \
+                    self.process_dict[next_process].qlimit:
                 self.process_dict[next_process].waiting.append(self.env.event())
                 # record: delay_start
                 self.record(self.env.now, None, self.name, event="delay_start")
@@ -176,7 +176,7 @@ class Process(object):
             # record: delay_finish
             pre_process = part.data[(part.i - 1, 'process')] if part.i > 0 else 'Source'
             self.record(self.env.now, None, pre_process, event="delay_finish")
-            
+
         if self.parts_sent == part.data_num:  # 해당 공정 종료
             self.flag = True
 
@@ -190,7 +190,12 @@ class Process(object):
             self.record(self.env.now, part.id, self.name, event="queue_entered")
 
     def record(self, time, part, process, event=None):
-        self.event_tracer["event"].append(event)
-        self.event_tracer["time"].append(time)
-        self.event_tracer["part"].append(part)
-        self.event_tracer["process"].append(process)
+        EVENT_TRACER["event"].append(event)
+        EVENT_TRACER["time"].append(time)
+        EVENT_TRACER["part"].append(part)
+        EVENT_TRACER["process"].append(process)
+
+
+# event tracer을 전처리나 후처리 파일로 return 해 주는 함수
+def return_event_tracer():
+    return EVENT_TRACER
