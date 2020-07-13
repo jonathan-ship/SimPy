@@ -4,7 +4,7 @@ import scipy.stats as st
 import simpy
 import time
 
-from SimComponents import Source, Sink, Process
+from SimComponents import Source, Sink, Process, return_event_tracer
 from Postprocessing import Utilization, Queue
 
 # 코드 실행 시작 시각
@@ -49,19 +49,18 @@ df = pd.concat([df_part, df], axis=1)
 env = simpy.Environment()
 
 ##
-event_tracer = {"event": [], "time": [], "part": [], "process": []}
 process_dict = {}
 process = []
 m_dict = {}
 
 # Source, Sink modeling
-Source = Source(env, 'Source', df, process_dict, len(df), event_tracer=event_tracer, data_type="df")
+Source = Source(env, 'Source', df, process_dict, len(df), data_type="df")
 Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
 
 # process modeling
 for i in range(len(process_list)):
     m_dict[process_list[i]] = 1
-    process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, event_tracer=event_tracer, qlimit=2))
+    process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, qlimit=1))
 for i in range(len(process_list)):
     process_dict[process_list[i]] = process[i]
 process_dict['Sink'] = Sink
@@ -69,7 +68,7 @@ process_dict['Sink'] = Sink
 # Simulation
 start = time.time()  # 시뮬레이션 실행 시작 시각
 env.run()
-finish = time.time()  # 시뮬레이션 실행 종료 시각 
+finish = time.time()  # 시뮬레이션 실행 종료 시각
 
 print('#' * 80)
 print("Results of simulation")
@@ -89,28 +88,29 @@ if not os.path.exists(save_path):
     os.makedirs(save_path)
 
 # event tracer dataframe으로 변환
-df_event_tracer = pd.DataFrame(event_tracer)
-df_event_tracer.to_excel(save_path +'/event_PBS.xlsx')
+#df_event_tracer = pd.DataFrame(event_tracer)
+df_event_tracer = pd.DataFrame(return_event_tracer())
+df_event_tracer.to_excel(save_path +'/event_PBS_2.xlsx')
 
 # DATA POST-PROCESSING
 # Event Tracer을 이용한 후처리
-print('#' * 80)
-print("Data Post-Processing")
-print('#' * 80)
-
-# 가동율
-Utilization = Utilization(df_event_tracer, process_dict, process_list)
-Utilization.utilization()
-utilization = Utilization.u_dict
-
-for process in process_list:
-    print("utilization of {} : ".format(process), utilization[process])
-
-# process 별 평균 대기시간, 총 대기시간
-Queue = Queue(df_event_tracer, process_list)
-Queue.waiting_time()
-print('#' * 80)
-for process in process_list:
-    print("average waiting time of {} : ".format(process), Queue.average_waiting_time_dict[process])
-for process in process_list:
-    print("total waiting time of {} : ".format(process), Queue.total_waiting_time_dict[process])
+# print('#' * 80)
+# print("Data Post-Processing")
+# print('#' * 80)
+#
+# # 가동율
+# Utilization = Utilization(df_event_tracer, process_dict, process_list)
+# Utilization.utilization()
+# utilization = Utilization.u_dict
+#
+# for process in process_list:
+#     print("utilization of {} : ".format(process), utilization[process])
+#
+# # process 별 평균 대기시간, 총 대기시간
+# Queue = Queue(df_event_tracer, process_list)
+# Queue.waiting_time()
+# print('#' * 80)
+# for process in process_list:
+#     print("average waiting time of {} : ".format(process), Queue.average_waiting_time_dict[process])
+# for process in process_list:
+#     print("total waiting time of {} : ".format(process), Queue.total_waiting_time_dict[process])
