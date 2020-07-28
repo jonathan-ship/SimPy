@@ -51,7 +51,7 @@ for i in range(len(process_list) + 1):
         model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, process_time=process_time)
 
 start_sim = time.time()
-env.run(until=1001)
+env.run(until=1000)
 finish_sim = time.time()
 
 print('#' * 80)
@@ -74,9 +74,13 @@ df_event_tracer.to_excel(save_path +'/DD3_case1.xlsx')
 
 # Post-Processing
 from PostProcessing_rev import Utilization
-utilization = Utilization(df_event_tracer, model, "Process1", type="Process")
+utilization_process = Utilization(df_event_tracer, model, "Process1", type="Process")
 print('#' * 80)
 print("Post-Processing")
 print("D/D/3 Case 1")
+print("IAT: 10s, Service Time: 10s, 10s, 10s")
 print('#' * 80)
-print("utilization of Process1: ", utilization.utilization())
+print("utilization of Process1: ", utilization_process.utilization())
+for i in range(server_num):
+    utilization_server = Utilization(df_event_tracer, model, model["Process1"].server[i].name, type="Server")
+    print("utilization of server {0}: ".format(i), utilization_server.utilization())
