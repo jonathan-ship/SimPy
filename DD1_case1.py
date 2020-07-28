@@ -15,7 +15,7 @@ from SimComponents_rev import Source, Sink, Process, return_event_tracer
 start_run = time.time()
 
 server_num = 1
-blocks = 1000  # Run_time / IAT
+blocks = 100  # Run_time / IAT
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -48,10 +48,10 @@ for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, 'Sink')
     else:
-        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), 1, model, process_time=process_time)
+        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, process_time=process_time)
 
 start_sim = time.time()
-env.run(until=1000)
+env.run()
 finish_sim = time.time()
 
 print('#' * 80)
@@ -78,5 +78,6 @@ utilization = Utilization(df_event_tracer, model, "Process1", type="Process")
 print('#' * 80)
 print("Post-Processing")
 print("D/D/1 Case 1")
+print("IAT: 10s, Service Time: 10s")
 print('#' * 80)
 print("utilization of Process1: ", utilization.utilization())
