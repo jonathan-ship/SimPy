@@ -46,4 +46,24 @@ class Utilization(object):
         return u
 
 
+class LeadTime(object):
+    def __init__(self, data, process_list):
+        self.data = data  # Event Tracer
+        self.list_leadtime = []
+        self.part_list = list(data["PART"][(data["EVENT"] == "part_transferred") & (data["PROCESS"] == process_list[-1])])
+
+    def avg_leadtime(self):
+        for part in self.part_list:
+            part_data = self.data[self.data["PART"] == part]
+            df_part_start = part_data["TIME"][part_data["EVENT"] == "part_created"]
+            df_part_finish = part_data["TIME"][part_data["EVENT"] == "part_transferred"]
+
+            df_part_start = df_part_start.reset_index(drop=True)
+            df_part_finish = df_part_finish.reset_index(drop=True)
+
+            self.list_leadtime.append(df_part_finish[len(df_part_finish)-1] - df_part_start[0])
+
+        return np.mean(self.list_leadtime)
+
+
 
