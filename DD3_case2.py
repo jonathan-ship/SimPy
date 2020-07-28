@@ -74,9 +74,13 @@ df_event_tracer.to_excel(save_path +'/DD3_case2.xlsx')
 
 # Post-Processing
 from PostProcessing_rev import Utilization
-utilization = Utilization(df_event_tracer, model, "Process1", type="Process")
+utilization_process = Utilization(df_event_tracer, model, "Process1", type="Process")
 print('#' * 80)
 print("Post-Processing")
 print("D/D/3 Case 2")
+print("IAT: 10s, Service Time: 5s, 10s, 15s")
 print('#' * 80)
-print("utilization of Process1: ", utilization.utilization())
+print("utilization of Process1: ", utilization_process.utilization())
+for i in range(server_num):
+    utilization_server = Utilization(df_event_tracer, model, model["Process1"].server[i].name, type="Server")
+    print("utilization of server {0}: ".format(i), utilization_server.utilization())
