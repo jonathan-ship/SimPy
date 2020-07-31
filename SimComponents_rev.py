@@ -1,6 +1,7 @@
 import simpy
 import pandas as pd
 import numpy as np
+from collections import deque
 
 EVENT_TRACER = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS", "SERVER_ID"])
 
@@ -51,11 +52,9 @@ class Source(object):
             if next_queue + next_server >= self.process_dict[next_process].qlimit:
                 self.process_dict[next_process].waiting.append(self.env.event())
                 # record: delay_start
-                record(self.env.now, self.name, event="delay_start")
+                record(self.env.now, self.name, part_id=part.id, event="delay_start")
 
                 yield self.process_dict[next_process].waiting[-1]
-                # delay_finish
-                record(self.env.now, self.name, event="delay_start")
 
             # part transferred
             # record: part_transferred
@@ -77,6 +76,7 @@ class Process(object):
         self.server_num = server_num
         self.server = [SubProcess(env, self.name, '{0}_{1}'.format(self.name, i), process_dict, self.server_process_time[i]) for i in range(server_num)]
         self.qlimit = qlimit
+        self.waiting = deque([])
         self.routing_logic = routing_logic
         self.parts_sent = 0
         self.server_idx = 0
@@ -113,7 +113,6 @@ class SubProcess(object):
         # SubProcess 실행
         self.action = env.process(self.run())
         self.queue = simpy.Store(self.env)
-        self.waiting = []
         self.flag = False  # SubProcess의 작업 여부
 
     def run(self):
@@ -140,16 +139,16 @@ class SubProcess(object):
                 lag = part.data[(part.step + 1, 'start_time')] - self.env.now
                 if lag > 0:
                     yield self.env.timeout(lag)
+
                 # delay start
                 next_server, next_queue = self.process_dict[next_process].get_num_of_part()
                 if next_queue + next_server >= self.process_dict[next_process].qlimit:
                     self.process_dict[next_process].waiting.append(self.env.event())
                     # record: delay_start
-                    record(self.env.now, self.process_name, server_id=self.name, event="delay_start")
+                    record(self.env.now, self.process_name, part_id=part.id,server_id=self.name, event="delay_start")
 
                     yield self.process_dict[next_process].waiting[-1]
-                    # record: delay_finish
-                    record(self.env.now, self.process_name, server_id=self.name, event="delay_finish")
+
 
             # record: part_transferred
             record(self.env.now, self.process_name, part_id=part.id, server_id=self.name, event="part_transferred")
@@ -160,8 +159,11 @@ class SubProcess(object):
 
             # delay finish
             server, queue = self.process_dict[self.process_name].get_num_of_part()
-            if (server + queue < self.process_dict[self.process_name].qlimit) and (len(self.waiting) > 0):
-                self.waiting.pop(0).succeed()
+            if (server + queue < self.process_dict[self.process_name].qlimit) and (len(self.process_dict[self.process_name].waiting) > 0):
+                self.process_dict[self.process_name].waiting.popleft().succeed()
+                # record: delay_finish
+                pre_process = part.data[(part.step - 2, 'process')] if part.step > 1 else 'Source'
+                record(self.env.now, pre_process, part_id=part.id, event="delay_finish")
 
 
 class Sink(object):
@@ -182,7 +184,7 @@ class Routing(object):
         self.server = self.process.server
         self.server_num = self.process.server_num
 
-    def most_unutilized(self):
+    def most_unutilized(self): ##
         from PostProcessing_rev import Utilization
         utilization_list = []
         for i in range(self.server_num):
