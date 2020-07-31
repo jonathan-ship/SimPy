@@ -4,11 +4,10 @@ import scipy.stats as st
 import simpy
 import time
 
-from SimComponents import Source, Sink, Process, return_event_tracer
-from Postprocessing import Utilization, Queue
+from SimComponents_rev import Source, Sink, Process, return_event_tracer
 
 # 코드 실행 시작 시각
-start_0 = time.time()
+start_run = time.time()
 
 # csv 파일 pandas 객체 생성 // 000, 003, fin 중 선택 가능
 data_all = pd.read_csv('./data/PBS_assy_sequence_gen_fin.csv')
@@ -49,21 +48,19 @@ df = pd.concat([df_part, df], axis=1)
 env = simpy.Environment()
 
 ##
-process_dict = {}
-process = []
+model = {}
 m_dict = {}
+server_num = [1 for _ in range(len(process_list))]
 
-# Source, Sink modeling
-Source = Source(env, 'Source', df, process_dict, len(df), data_type="df")
-Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
+# Sink modeling
 
+Source = Source(env, 'Source', df, model)
 # process modeling
-for i in range(len(process_list)):
-    m_dict[process_list[i]] = 1
-    process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, qlimit=1))
-for i in range(len(process_list)):
-    process_dict[process_list[i]] = process[i]
-process_dict['Sink'] = Sink
+for i in range(len(process_list) + 1):
+    if i == len(process_list):
+        model['Sink'] = Sink(env, 'Sink')
+    else:
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, qlimit=1)
 
 # Simulation
 start = time.time()  # 시뮬레이션 실행 시작 시각
@@ -75,12 +72,11 @@ print("Results of simulation")
 print('#' * 80)
 
 # 코드 실행 시간
-print("data pre-processing : ", start - start_0)
-print("total time : ", finish - start_0)
+print("data pre-processing : ", start - start_run)
+print("total time : ", finish - start_run)
 print("simulation execution time :", finish - start)
 
 # 총 리드타임 - 마지막 part가 Sink에 도달하는 시간
-print("Total Lead Time :", Sink.last_arrival, "\n")
 
 # save data
 save_path = './result'
@@ -90,7 +86,7 @@ if not os.path.exists(save_path):
 # event tracer dataframe으로 변환
 #df_event_tracer = pd.DataFrame(event_tracer)
 df_event_tracer = pd.DataFrame(return_event_tracer())
-df_event_tracer.to_excel(save_path +'/event_PBS_2.xlsx')
+df_event_tracer.to_excel(save_path +'/event_PBS_rev.xlsx')
 
 # DATA POST-PROCESSING
 # Event Tracer을 이용한 후처리
