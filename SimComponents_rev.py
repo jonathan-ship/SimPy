@@ -68,39 +68,32 @@ class Process(object):
         self.server_idx = 0
 
     def put(self, part, process_from, server_from):
-        if part.data[(part.step, 'process_time')]:  # process_time > 0 일 때
-            # Routing
-            routing = Routing(self.process_dict[self.name])
-            if self.routing_logic == "most_unutilized":  # most_unutilized
-                self.server_idx = routing.most_unutilized()
-            else:
-                self.server_idx = 0 if (self.parts_sent == 0) or (self.server_idx == self.server_num-1) else self.server_idx + 1
-
-            # lag: 현행공정 계획된 시작시간 - 현재 시각
-            if part.data[(part.step, 'start_time')]:
-                lag = part.data[(part.step, 'start_time')] - self.env.now
-                if lag > 0:
-                    yield self.env.timeout(lag)
-
-            # delay start
-            server, queue = self.get_num_of_part()
-            if queue + server >= self.qlimit:
-                self.server[self.server_idx].waiting.append(self.env.event())
-                # record: delay_start
-                record(self.env.now, process_from, part_id=part.id, server_id=server_from, event="delay_start")
-
-                yield self.server[self.server_idx].waiting[-1]
-                # record: delay_finish
-                record(self.env.now, process_from, part_id=part.id, server_id=server_from, event="delay_finish")
-
-            record(self.env.now, self.name, part_id=part.id, server_id=self.server[self.server_idx].name, event="queue_entered")
-            self.server[self.server_idx].sub_queue.put(part)
+        # Routing
+        routing = Routing(self.process_dict[self.name])
+        if self.routing_logic == "most_unutilized":  # most_unutilized
+            self.server_idx = routing.most_unutilized()
         else:
-            next_process = part.data[(part.step + 1, 'process')]
-            if self.process_dict[next_process].__class__.__name__ == 'Process':
-                self.process_dict[next_process].put(part, process_from, server_from)
-            else:
-                self.process_dict[next_process].put(part)
+            self.server_idx = 0 if (self.parts_sent == 0) or (self.server_idx == self.server_num-1) else self.server_idx + 1
+
+        # lag: 현행공정 계획된 시작시간 - 현재 시각
+        if part.data[(part.step, 'start_time')]:
+            lag = part.data[(part.step, 'start_time')] - self.env.now
+            if lag > 0:
+                yield self.env.timeout(lag)
+
+        # delay start
+        server, queue = self.get_num_of_part()
+        if queue + server >= self.qlimit:
+            self.server[self.server_idx].waiting.append(self.env.event())
+            # record: delay_start
+            record(self.env.now, process_from, part_id=part.id, server_id=server_from, event="delay_start")
+
+            yield self.server[self.server_idx].waiting[-1]
+            # record: delay_finish
+            record(self.env.now, process_from, part_id=part.id, server_id=server_from, event="delay_finish")
+
+        record(self.env.now, self.name, part_id=part.id, server_id=self.server[self.server_idx].name, event="queue_entered")
+        self.server[self.server_idx].sub_queue.put(part)
 
     def get_num_of_part(self):
         server_num = 0
@@ -148,8 +141,11 @@ class SubProcess(object):
             # record: work_finish
             record(self.env.now, self.process_name, part_id=self.part.id, server_id=self.name, event="work_finish")
 
-            # next process
+
             self.part.step += 1
+            while (self.part.data[(self.part.step, 'process_time')] == 0) and (self.part.data[(self.part.step, 'process') != 'Sink']):
+                self.part.step += 1
+
             next_process = self.part.data[(self.part.step, 'process')]
             if self.process_dict[next_process].__class__.__name__ == 'Process':
                 yield self.env.process(self.process_dict[next_process].put(self.part, self.process_name, self.name))
