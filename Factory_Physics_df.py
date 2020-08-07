@@ -4,14 +4,13 @@ import os
 import scipy.stats as st
 import pandas as pd
 
-from SimComponents import Sink, Process, Source
-from Postprocessing import Utilization, Queue
+from SimComponents_rev import Sink, Process, Source
 
 # 코드 실행 시작 시각
 start_0 = time.time()
 
 # DATA PRE-PROCESSING
-blocks = 18000  # 블록 수
+blocks = 1000  # 블록 수
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
 
 process_list = ['process1', 'process2']
@@ -40,25 +39,19 @@ data = pd.concat([df_part, data], axis=1)
 env = simpy.Environment()
 
 ##
-event_tracer = {"event": [], "time": [], "part": [], "process": []}
-process_dict = {}
-process = []
+event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS", "SERVER_ID"])
+model = {}
+server_num = [1 for _ in range(len(process_list))]
 
-# 기계 수
-m_1 = 1
-m_2 = 1
-m_dict = {'process1': m_1, 'process2': m_2}
+# Modeling
+# Source
+Source = Source(env, 'Source', data, model, event_tracer)
 
-# Source, Sink modeling
-Source = Source(env, 'Source', data, process_dict, blocks, event_tracer=event_tracer, data_type="df")
-Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
-
-# Process modeling
-for i in range(len(process_list)):
-    process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, event_tracer=event_tracer, qlimit=10000))
-for i in range(len(process_list)):
-    process_dict[process_list[i]] = process[i]
-process_dict['Sink'] = Sink
+for i in range(len(process_list) + 1):
+    if i == len(process_list):
+        model['Sink'] = Sink(env, 'Sink')
+    else:
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, event_tracer, qlimit=1)
 
 # Run it
 start = time.time()
@@ -74,8 +67,7 @@ print("data pre-processing : ", start - start_0)  # 시뮬레이션 시작 시�
 print("total time : ", finish - start_0)
 print("simulation execution time :", finish - start)  # 시뮬레이션 종료 시각
 
-# 총 리드타임 - 마지막 part가 Sink에 도달하는 시간
-print("Total Lead Time :", Sink.last_arrival)
+
 
 # save data
 save_path = './result'
@@ -86,25 +78,3 @@ if not os.path.exists(save_path):
 df_event_tracer = pd.DataFrame(event_tracer)
 df_event_tracer.to_excel(save_path + '/event_Factory_Physics.xlsx')
 
-# DATA POST-PROCESSING
-# Event Tracer을 이용한 후처리
-print('#' * 80)
-print("Data Post-Processing")
-print('#' * 80)
-
-# 가동율
-Utilization = Utilization(df_event_tracer, process_dict, process_list)
-Utilization.utilization()
-utilization = Utilization.u_dict
-
-for process in process_list:
-    print("utilization of {} : ".format(process), utilization[process])
-
-# process 별 평균 대기시간, 총 대기시간
-Queue = Queue(df_event_tracer, process_list)
-Queue.waiting_time()
-print('#' * 80)
-for process in process_list:
-    print("average waiting time of {} : ".format(process), Queue.average_waiting_time_dict[process])
-for process in process_list:
-    print("total waiting time of {} : ".format(process), Queue.total_waiting_time_dict[process])

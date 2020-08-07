@@ -4,17 +4,17 @@ import scipy.stats as st
 import simpy
 import time
 
-from SimComponents_rev import Source, Sink, Process, return_event_tracer
+from SimComponents_rev import Source, Sink, Process
 
 # 코드 실행 시작 시각
 start_run = time.time()
 
 # csv 파일 pandas 객체 생성 // 000, 003, fin 중 선택 가능
-data_all = pd.read_csv('./data/PBS_assy_sequence_gen_fin.csv')
-data = data_all[["product", "plate_weld", "saw_front", "turn_over", "saw_back", "longi_weld", "unit_assy", "sub_assy"]]
+data_all = pd.read_csv('./data/PBS_assy_sequence_gen_000.csv')
+data = data_all[["product", "plate_weld", "saw_front", "turn_over", "saw_back", "longi_attach", "longi_weld", "sub_assy"]]
 
 # process list
-process_list = ["plate_weld", "saw_front", "turn_over", "saw_back", "longi_weld", "unit_assy", "sub_assy"]
+process_list = ["plate_weld", "saw_front", "turn_over", "saw_back", "longi_attach", "longi_weld", "sub_assy"]
 
 # DATA PRE-PROCESSING
 # part 정보
@@ -49,18 +49,19 @@ env = simpy.Environment()
 
 ##
 model = {}
-m_dict = {}
 server_num = [1 for _ in range(len(process_list))]
+event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS", "SERVER_ID"])
 
-# Sink modeling
+# Modeling
+# Source
+Source = Source(env, 'Source', df, model, event_tracer)
 
-Source = Source(env, 'Source', df, model)
 # process modeling
 for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, 'Sink')
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, qlimit=1)
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, event_tracer, qlimit=1)
 
 # Simulation
 start = time.time()  # 시뮬레이션 실행 시작 시각
@@ -83,30 +84,5 @@ save_path = './result'
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
-# event tracer dataframe으로 변환
-#df_event_tracer = pd.DataFrame(event_tracer)
-df_event_tracer = pd.DataFrame(return_event_tracer())
-df_event_tracer.to_excel(save_path +'/event_PBS_rev.xlsx')
-
-# DATA POST-PROCESSING
-# Event Tracer을 이용한 후처리
-# print('#' * 80)
-# print("Data Post-Processing")
-# print('#' * 80)
-#
-# # 가동율
-# Utilization = Utilization(df_event_tracer, process_dict, process_list)
-# Utilization.utilization()
-# utilization = Utilization.u_dict
-#
-# for process in process_list:
-#     print("utilization of {} : ".format(process), utilization[process])
-#
-# # process 별 평균 대기시간, 총 대기시간
-# Queue = Queue(df_event_tracer, process_list)
-# Queue.waiting_time()
-# print('#' * 80)
-# for process in process_list:
-#     print("average waiting time of {} : ".format(process), Queue.average_waiting_time_dict[process])
-# for process in process_list:
-#     print("total waiting time of {} : ".format(process), Queue.total_waiting_time_dict[process])
+# event tracer 저장
+event_tracer.to_excel(save_path +'/event_PBS_000.xlsx')
