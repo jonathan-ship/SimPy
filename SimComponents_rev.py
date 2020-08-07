@@ -21,10 +21,11 @@ class Source(object):
         self.process_dict = process_dict
         self.event_tracer = event_tracer
 
-        self.action = env.process(self.run())
+        self.action = env.process(self.run)
         self.parts_sent = 0
         self.flag = False
 
+    @property
     def run(self):
         while True:
             # block_data로부터 part 정보 읽어주기
@@ -43,13 +44,12 @@ class Source(object):
 
             # next process
             next_process = part.data[(part.step, 'process')]
-            yield self.env.process(self.process_dict[next_process].put(part, self.name, None))
-            self.parts_sent += 1
             # record: part_transferred
             record(self.event_tracer, self.env.now, self.name, part_id=part.id, event="part_transferred")
+            yield self.env.process(self.process_dict[next_process].put(part, self.name, None, 0))
+            self.parts_sent += 1
 
             if self.parts_sent == len(self.block_data):
-                print('all parts are sent')
                 break
 
 
@@ -68,17 +68,17 @@ class Process(object):
         self.parts_sent = 0
         self.server_idx = 0
 
-    def put(self, part, process_from, server_from):
+    def put(self, part, process_from, server_from, step):
         # Routing
-        routing = Routing(self.process_dict[self.name], self.event_tracer)
+        routing = Routing(self.event_tracer, self.process_dict[self.name])
         if self.routing_logic == "most_unutilized":  # most_unutilized
             self.server_idx = routing.most_unutilized()
         else:
             self.server_idx = 0 if (self.parts_sent == 0) or (self.server_idx == self.server_num-1) else self.server_idx + 1
 
         # lag: 현행공정 계획된 시작시간 - 현재 시각
-        if part.data[(part.step, 'start_time')]:
-            lag = part.data[(part.step, 'start_time')] - self.env.now
+        if part.data[(part.step + step, 'start_time')] and process_from != 'Source':
+            lag = part.data[(part.step + step, 'start_time')] - self.env.now
             if lag > 0:
                 yield self.env.timeout(lag)
 
@@ -88,7 +88,7 @@ class Process(object):
             self.server[self.server_idx].waiting.append(self.env.event())
             # record: delay_start
             record(self.event_tracer, self.env.now, process_from, part_id=part.id, server_id=server_from, event="delay_start")
-
+            print(part.id, self.env._queue)
             yield self.server[self.server_idx].waiting[-1]
             # record: delay_finish
             record(self.event_tracer, self.env.now, process_from, part_id=part.id, server_id=server_from, event="delay_finish")
@@ -129,7 +129,6 @@ class SubProcess(object):
             # queue로부터 part 가져오기
             self.part = yield self.sub_queue.get()
             record(self.event_tracer, self.env.now, self.process_name, part_id=self.part.id, server_id=self.name, event="queue_released")
-            self.process_dict[self.process_name].parts_sent += 1
             self.flag = True
 
             # record: work_start
@@ -143,14 +142,16 @@ class SubProcess(object):
             # record: work_finish
             record(self.event_tracer, self.env.now, self.process_name, part_id=self.part.id, server_id=self.name, event="work_finish")
 
-            # next process
-            self.part.step += 1
-            #while (self.part.data[(self.part.step, 'process_time')] == 0) and (self.part.data[(self.part.step, 'process') != 'Sink']):
-            #    self.part.step += 1
+            step = 0
+            while (self.part.data[(self.part.step + step + 1, 'process_time')] == 0) \
+                    and (self.part.data[(self.part.step + step + 1, 'process')] != 'Sink'):
+                step += 1
+            if step == 0:
+                step += 1
 
-            next_process = self.part.data[(self.part.step, 'process')]
+            next_process = self.part.data[(self.part.step + step, 'process')]
             if self.process_dict[next_process].__class__.__name__ == 'Process':
-                yield self.env.process(self.process_dict[next_process].put(self.part, self.process_name, self.name))
+                yield self.env.process(self.process_dict[next_process].put(self.part, self.process_name, self.name, step))
             else:
                 self.process_dict[next_process].put(self.part)
             self.process_dict[self.process_name].parts_sent += 1
@@ -159,6 +160,7 @@ class SubProcess(object):
 
             self.flag = False
 
+            self.part.step += step
             self.part = None
 
             # delay finish
@@ -168,25 +170,29 @@ class SubProcess(object):
 
 
 class Sink(object):
-    def __init__(self, env, name):
+    def __init__(self, env, name, event_tracer):
         self.name = name
         self.env = env
         self.parts_rec = 0
         self.last_arrival = 0.0
+        self.store = simpy.Store(env)
+        self.event_tracer = event_tracer
 
     def put(self, part):
         self.parts_rec += 1
         self.last_arrival = self.env.now
+        self.store.put(part)
+        record(self.event_tracer, self.env.now, 'Sink', part_id=part.id, event="completed")
 
 
 class Routing(object):
-    def __init__(self, process, event_tracer):
+    def __init__(self, event_tracer, process):
         self.process = process  # routing logic을 적용할 process
         self.server = self.process.server
         self.server_num = self.process.server_num
         self.event_tracer = event_tracer
 
-    def most_unutilized(self):  ##
+    def most_unutilized(self):
         from PostProcessing_rev import Utilization
         utilization_list = []
         for i in range(self.server_num):

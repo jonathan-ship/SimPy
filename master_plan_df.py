@@ -1,14 +1,14 @@
 import os
 import pandas as pd
+import numpy as np
 import simpy
 import time
 import random
 
-from SimComponents import Source, Sink, Process
-from Postprocessing import Utilization, Queue
+from SimComponents_rev import Source, Sink, Process
 
 # 코드 실행 시각
-start_0 = time.time()
+start_run = time.time()
 
 # DATA INPUT
 data_all = pd.read_excel('./data/MCM_ACTIVITY.xls')
@@ -30,19 +30,19 @@ block_list = list(data.drop_duplicates(['BLOCKCODE'])['BLOCKCODE'])
 
 df_part = pd.DataFrame(block_list, columns=["part"])
 
-# raw data 저장 - block1(list)
-# block1 = []
-# activity_num = []
-# for block_code in block_list:
-#     temp = data[data['BLOCKCODE'] == block_code]
-#     temp_1 = temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=False)
-#     temp = temp_1.reset_index(drop=True, inplace=False)
-#
-#     block1.append(temp)
+# 각 블록별 activity 개수
+activity_num = []
+for block_code in block_list:
+    temp = data[data['BLOCKCODE'] == block_code]
+    temp_1 = temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=False)
+    temp = temp_1.reset_index(drop=True, inplace=False)
+    activity_num.append(len(temp))
+
+max_num_of_activity = np.max(activity_num)
 
 # S-Module에 넣어 줄 dataframe(중복된 작업시간 처리)
-# 13 : 한 블록이 거치는 공정의 최대 개수(12) + Sink
-columns = pd.MultiIndex.from_product([[i for i in range(13)], ['start_time', 'process_time', 'process']])
+# 13 : 한 블록이 거치는 공정의 최대 개수(12) + Sink  --> 수정 필요
+columns = pd.MultiIndex.from_product([[i for i in range(max_num_of_activity + 1)], ['start_time', 'process_time', 'process']])
 df = pd.DataFrame([], columns=columns)
 idx = 0  # df에 저장된 block 개수
 
@@ -88,26 +88,22 @@ df = pd.concat([df_part, df], axis=1)
 env = simpy.Environment()
 
 ##
-event_tracer = {"event": [], "time": [], "part": [], "process": []}
-process_dict = {}
-process = []
-m_dict = {}
+model = {}
+server_num = [1 for _ in range(len(process_list))]
+event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS", "SERVER_ID"])
 
 # Source, Sink modeling
-Source = Source(env, 'Source', df, process_dict, len(df), event_tracer=event_tracer,data_type="df")
-Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
+Source = Source(env, 'Source', df[:100], model, event_tracer)
 
 # Process modeling
-for i in range(len(process_list)):
-    # 각 공정의 작업장 수 1~10
-    m_dict[process_list[i]] = random.randrange(1, 6)
-    # qlimit 5 / 10 바꿔가면서 run 해볼 것 / run 할 때마다 event tracer 파일 새로 생성됨
-    process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, event_tracer=event_tracer, qlimit=10))
-for i in range(len(process_list)):
-    process_dict[process_list[i]] = process[i]
-process_dict['Sink'] = Sink
+for i in range(len(process_list) + 1):
+    if i == len(process_list):
+        model['Sink'] = Sink(env, 'Sink', event_tracer)
+    else:
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, event_tracer, qlimit=1)
 
 # Run it
+df.to_excel('./master_plan_전처리.xlsx')
 start = time.time()  # 시뮬레이션 시작 시각
 env.run()
 finish = time.time()  # 시뮬레이션 종료 시각
@@ -117,12 +113,9 @@ print("Results of simulation")
 print('#' * 80)
 
 # 코드 실행 시간
-print("data pre-processing : ", start - start_0)
+print("data pre-processing : ", start - start_run)
 print("simulation execution time :", finish - start)
-print("total time : ", finish - start_0)
-
-# 총 리드타임 - 마지막 part가 Sink에 도달하는 시간
-print("Total Lead Time :", Sink.last_arrival)
+print("total time : ", finish - start_run)
 
 # save data
 save_path = './result'
@@ -130,19 +123,4 @@ if not os.path.exists(save_path):
     os.makedirs(save_path)
 
 # event tracer dataframe으로 변환
-df_event_tracer = pd.DataFrame(event_tracer)
-df_event_tracer.to_excel(save_path +'/event_master_plan.xlsx')
-
-# DATA POST-PROCESSING
-# Event Tracer을 이용한 후처리
-print('#' * 80)
-print("Data Post-Processing")
-print('#' * 80)
-
-# UTILIZATION
-# Utilization = Utilization(df_event_tracer, process_dict, process_list)
-# Utilization.utilization()
-# utilization = Utilization.u_dict
-#
-# for process in process_list:
-#     print("utilization of {} : ".format(process), utilization[process])
+event_tracer.to_excel(save_path +'/event_master_plan.xlsx')
