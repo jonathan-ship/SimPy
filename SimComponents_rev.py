@@ -21,11 +21,10 @@ class Source(object):
         self.process_dict = process_dict
         self.event_tracer = event_tracer
 
-        self.action = env.process(self.run)
+        self.action = env.process(self.run())
         self.parts_sent = 0
         self.flag = False
 
-    @property
     def run(self):
         while True:
             # block_data로부터 part 정보 읽어주기
@@ -44,12 +43,13 @@ class Source(object):
 
             # next process
             next_process = part.data[(part.step, 'process')]
+            yield self.env.process(self.process_dict[next_process].put(part, self.name, 0))
+            self.parts_sent += 1
             # record: part_transferred
             record(self.event_tracer, self.env.now, self.name, part_id=part.id, event="part_transferred")
-            yield self.env.process(self.process_dict[next_process].put(part, self.name, None, 0))
-            self.parts_sent += 1
 
             if self.parts_sent == len(self.block_data):
+                print("all parts are sent")
                 break
 
 
@@ -68,7 +68,7 @@ class Process(object):
         self.parts_sent = 0
         self.server_idx = 0
 
-    def put(self, part, process_from, server_from, step):
+    def put(self, part, process_from, step):
         # Routing
         routing = Routing(self.event_tracer, self.process_dict[self.name])
         if self.routing_logic == "most_unutilized":  # most_unutilized
@@ -87,13 +87,13 @@ class Process(object):
         if queue + server >= self.qlimit:
             self.server[self.server_idx].waiting.append(self.env.event())
             # record: delay_start
-            record(self.event_tracer, self.env.now, process_from, part_id=part.id, server_id=server_from, event="delay_start")
-            print(part.id, self.env._queue)
+            record(self.event_tracer, self.env.now, process_from, part_id=part.id, event="delay_start")
+
             yield self.server[self.server_idx].waiting[-1]
             # record: delay_finish
-            record(self.event_tracer, self.env.now, process_from, part_id=part.id, server_id=server_from, event="delay_finish")
+            record(self.event_tracer, self.env.now, process_from, part_id=part.id, event="delay_finish")
 
-        record(self.event_tracer, self.env.now, self.name, part_id=part.id, server_id=self.server[self.server_idx].name, event="queue_entered")
+        record(self.event_tracer, self.env.now, self.server[self.server_idx].name, part_id=part.id, event="queue_entered")
         self.server[self.server_idx].sub_queue.put(part)
 
     def get_num_of_part(self):
@@ -128,11 +128,11 @@ class SubProcess(object):
         while True:
             # queue로부터 part 가져오기
             self.part = yield self.sub_queue.get()
-            record(self.event_tracer, self.env.now, self.process_name, part_id=self.part.id, server_id=self.name, event="queue_released")
+            record(self.event_tracer, self.env.now, self.name, part_id=self.part.id, event="queue_released")
             self.flag = True
 
             # record: work_start
-            record(self.event_tracer, self.env.now, self.process_name, part_id=self.part.id, server_id=self.name, event="work_start")
+            record(self.event_tracer, self.env.now, self.name, part_id=self.part.id, event="work_start")
 
             # work start
             self.working_start = self.env.now
@@ -140,7 +140,7 @@ class SubProcess(object):
             yield self.env.timeout(proc_time)
 
             # record: work_finish
-            record(self.event_tracer, self.env.now, self.process_name, part_id=self.part.id, server_id=self.name, event="work_finish")
+            record(self.event_tracer, self.env.now, self.name, part_id=self.part.id, event="work_finish")
 
             step = 0
             while (self.part.data[(self.part.step + step + 1, 'process_time')] == 0) \
@@ -151,12 +151,12 @@ class SubProcess(object):
 
             next_process = self.part.data[(self.part.step + step, 'process')]
             if self.process_dict[next_process].__class__.__name__ == 'Process':
-                yield self.env.process(self.process_dict[next_process].put(self.part, self.process_name, self.name, step))
+                yield self.env.process(self.process_dict[next_process].put(self.part, self.name, step))
             else:
                 self.process_dict[next_process].put(self.part)
             self.process_dict[self.process_name].parts_sent += 1
             # record: part_transferred
-            record(self.event_tracer, self.env.now, self.process_name, part_id=self.part.id, server_id=self.name, event="part_transferred")
+            record(self.event_tracer, self.env.now, self.name, part_id=self.part.id, event="part_transferred")
 
             self.flag = False
 
@@ -171,18 +171,17 @@ class SubProcess(object):
 
 class Sink(object):
     def __init__(self, env, name, event_tracer):
-        self.name = name
         self.env = env
+        self.name = name
+        self.event_tracer = event_tracer
+
         self.parts_rec = 0
         self.last_arrival = 0.0
-        self.store = simpy.Store(env)
-        self.event_tracer = event_tracer
 
     def put(self, part):
         self.parts_rec += 1
         self.last_arrival = self.env.now
-        self.store.put(part)
-        record(self.event_tracer, self.env.now, 'Sink', part_id=part.id, event="completed")
+        record(self.event_tracer, self.env.now, self.name, part_id=part.id, event="completed")
 
 
 class Routing(object):
@@ -196,13 +195,13 @@ class Routing(object):
         from PostProcessing_rev import Utilization
         utilization_list = []
         for i in range(self.server_num):
-            utilization = Utilization(self.event_tracer, self.process.process_dict, self.server[i].name, type="Server")
+            utilization = Utilization(self.event_tracer, self.process.process_dict, self.server[i].name)
             server_utilization = utilization.utilization()
             utilization_list.append(server_utilization)
         idx_min = np.argmin(utilization_list)
         return idx_min
 
 
-def record(event_tracer, time, process, part_id=None, server_id=None, event=None):
-    event_tracer.loc[len(event_tracer)] = [time, event, part_id, process, server_id]
+def record(event_tracer, time, process, part_id=None, event=None):
+    event_tracer.loc[len(event_tracer)] = [time, event, part_id, process]
 
