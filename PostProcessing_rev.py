@@ -10,7 +10,6 @@ import plotly as py
 import plotly.figure_factory as ff
 
 
-
 class Utilization(object):
     def __init__(self, data, process_dict, process):
         self.data = data
@@ -18,10 +17,9 @@ class Utilization(object):
         self.process = process  # utilization을 계산할 Process 혹은 Server
         self.type = "Process" if process in process_dict.keys() else "Server"
 
-        # 공정에 관한 event 중 work_start인 event의 시간 저장 (총 시간 계산, working time 시간 계산 시 사용)
-        # 공정에 관한 event 중 part_transferred인 event의 시간 저장 (총 시간 계산)
-        # 공정에 관한 event 중 work_finish인 event의 시간 저장 (working time 시간 계산 시 사용)
-
+    # 공정에 관한 event 중 work_start인 event의 시간 저장 (총 시간 계산, working time 시간 계산 시 사용)
+    # 공정에 관한 event 중 part_transferred인 event의 시간 저장 (총 시간 계산)
+    # 공정에 관한 event 중 work_finish인 event의 시간 저장 (working time 시간 계산 시 사용)
     def utilization(self):
         idx = self.data["PROCESS"].map(lambda x: self.process in x)
         self.data = self.data.rename(index=idx)
@@ -200,8 +198,14 @@ class SUBWIP:
         self.work_finish = []
 
     def subwip(self):
-        self.work_start = list(self.data["TIME"][(self.data["PROCESS"] == self.process) & (self.data["EVENT"] == "work_start")])
-        self.work_finish = list(self.data["TIME"][(self.data["PROCESS"] == self.process) & (self.data["EVENT"] == "work_finish")])
+        idx = self.data["PROCESS"].map(lambda x: self.process in x)
+        self.data = self.data.rename(index=idx)
+        if True not in self.data.index:
+            return 0
+        self.data = self.data.loc[True, :]
+
+        self.work_start = list(self.data["TIME"][self.data["EVENT"] == "work_start"])
+        self.work_finish = list(self.data["TIME"][self.data["EVENT"] == "work_finish"])
 
         wip = 0
         for i in range(len(self.work_start)-1):
