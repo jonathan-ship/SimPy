@@ -136,7 +136,13 @@ class SubProcess(object):
 
             # work start
             self.working_start = self.env.now
-            proc_time = self.process_time if self.process_time is not None else self.part.data[(self.part.step, "process_time")]
+
+            # process_time
+            if self.process_time == None:  # part에 process_time이 미리 주어지는 경우
+                proc_time = self.part.data[(self.part.step, "process_time")]
+            else:  # service time이 정해진 경우 --> 1) fixed time / 2) Stochastic-time
+                proc_time = self.process_time if type(self.process_time) == float else self.process_time()
+
             yield self.env.timeout(proc_time)
 
             # record: work_finish
