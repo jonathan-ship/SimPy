@@ -10,12 +10,12 @@ import numpy as np
 import time
 import os
 
-from SimComponents_rev import Source, Sink, Process, return_event_tracer
+from SimComponents_rev import Source, Sink, Process
 
 start_run = time.time()
 
 server_num = 1
-blocks = 100  # Run_time / IAT
+blocks = 1000  # Run_time / IAT
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -41,14 +41,15 @@ data = pd.concat([df_part, data], axis=1)
 env = simpy.Environment()
 model = {}
 process_time = {"Process1": [5]}
+event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS"])
 
-Source = Source(env, 'Source', data, model)
+Source = Source(env, 'Source', data, model, event_tracer)
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink')
+        model['Sink'] = Sink(env, 'Sink', event_tracer)
     else:
-        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, process_time=process_time)
+        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, event_tracer, process_time=process_time)
 
 start_sim = time.time()
 env.run()
@@ -69,15 +70,20 @@ save_path = './result'
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
-df_event_tracer = pd.DataFrame(return_event_tracer())
-df_event_tracer.to_excel(save_path +'/DD1_case2.xlsx')
+event_tracer.to_excel(save_path +'/DD1_case2.xlsx')
 
 # Post-Processing
-from PostProcessing_rev import Utilization
-utilization = Utilization(df_event_tracer, model, "Process1", type="Process")
+from PostProcessing_rev import Utilization, LeadTime
+utilization = Utilization(event_tracer, model, "Process1")
 print('#' * 80)
 print("Post-Processing")
 print("D/D/1 Case 2")
 print("IAT: 10s, Service Time: 5s")
+
+# 가동률
 print('#' * 80)
 print("utilization of Process1: ", utilization.utilization())
+
+# Avg.Lead time
+leadtime = LeadTime(event_tracer)
+print("Average Lead time: ", leadtime.avg_LT())
