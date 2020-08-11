@@ -10,12 +10,12 @@ import numpy as np
 import time
 import os
 
-from SimComponents_rev import Source, Sink, Process, return_event_tracer
+from SimComponents_rev import Source, Sink, Process
 
 start_run = time.time()
 
 server_num = 3
-blocks = 1000  # Run_time / IAT
+blocks = 101  # Run_time / IAT
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -41,17 +41,18 @@ data = pd.concat([df_part, data], axis=1)
 env = simpy.Environment()
 model = {}
 process_time = {"Process1": [10, 10, 10]}
+event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS"])
 
-Source = Source(env, 'Source', data, model)
+Source = Source(env, 'Source', data, model, event_tracer)
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink')
+        model['Sink'] = Sink(env, 'Sink', event_tracer)
     else:
-        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, process_time=process_time)
+        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, event_tracer, process_time=process_time, routing_logic="most_unutilized")
 
 start_sim = time.time()
-env.run(until=1000)
+env.run()
 finish_sim = time.time()
 
 print('#' * 80)
@@ -69,18 +70,24 @@ save_path = './result'
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
-df_event_tracer = pd.DataFrame(return_event_tracer())
-df_event_tracer.to_excel(save_path +'/DD3_case1.xlsx')
+event_tracer.to_excel(save_path +'/DD3_case1.xlsx')
 
 # Post-Processing
-from PostProcessing_rev import Utilization
-utilization_process = Utilization(df_event_tracer, model, "Process1", type="Process")
+from PostProcessing_rev import Utilization, LeadTime
+utilization_process = Utilization(event_tracer, model, "Process1")
 print('#' * 80)
 print("Post-Processing")
 print("D/D/3 Case 1")
 print("IAT: 10s, Service Time: 10s, 10s, 10s")
+
+# 가동률
 print('#' * 80)
 print("utilization of Process1: ", utilization_process.utilization())
 for i in range(server_num):
-    utilization_server = Utilization(df_event_tracer, model, model["Process1"].server[i].name, type="Server")
+    utilization_server = Utilization(event_tracer, model, model["Process1"].server[i].name)
     print("utilization of server {0}: ".format(i), utilization_server.utilization())
+
+# Avg.Lead time
+print('#' * 80)
+leadtime = LeadTime(event_tracer)
+print("Average Lead time: ", leadtime.avg_LT())
