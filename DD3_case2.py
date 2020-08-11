@@ -40,7 +40,7 @@ data = pd.concat([df_part, data], axis=1)
 # Simulation Modeling
 env = simpy.Environment()
 model = {}
-process_time = {"Process1": [5, 10, 15]}
+process_time = {"Process1": [5.0, 10.0, 15.0]}
 event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS"])
 
 Source = Source(env, 'Source', data, model, event_tracer)

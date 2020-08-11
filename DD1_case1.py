@@ -1,6 +1,6 @@
 '''
 D/D/1 Case 1
-Run time: 1000s
+# Run time: 1000s
 Source IAT = 10
 Server service time: 10s
 '''
@@ -15,7 +15,7 @@ from SimComponents_rev import Source, Sink, Process
 start_run = time.time()
 
 server_num = 1
-blocks = 1000  # Run_time / IAT
+blocks = 1000
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -40,7 +40,7 @@ data = pd.concat([df_part, data], axis=1)
 # Simulation Modeling
 env = simpy.Environment()
 model = {}  # process_dict
-process_time = {"Process1": [10]}  # server에 할당할 process time
+process_time = {"Process1": [10.0]}  # server에 할당할 process time
 event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS"])
 
 Source = Source(env, 'Source', data, model, event_tracer)

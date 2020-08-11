@@ -15,7 +15,7 @@ from SimComponents_rev import Source, Sink, Process
 start_run = time.time()
 
 server_num = 3
-blocks = 101  # Run_time / IAT
+blocks = 100 # Run_time / IAT
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -40,7 +40,7 @@ data = pd.concat([df_part, data], axis=1)
 # Simulation Modeling
 env = simpy.Environment()
 model = {}
-process_time = {"Process1": [10, 10, 10]}
+process_time = {"Process1": [10.0, 10.0, 10.0]}
 event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS"])
 
 Source = Source(env, 'Source', data, model, event_tracer)
