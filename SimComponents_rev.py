@@ -14,12 +14,12 @@ class Part(object):
 
 
 class Source(object):
-    def __init__(self, env, name, block_data, process_dict, event_tracer):
+    def __init__(self, env, name, block_data, process_dict, monitor):
         self.env = env
         self.name = name
         self.block_data = block_data
         self.process_dict = process_dict
-        self.event_tracer = event_tracer
+        self.Monitor = monitor
 
         self.action = env.process(self.run())
         self.parts_sent = 0
@@ -39,14 +39,16 @@ class Source(object):
                     yield self.env.timeout(part.data[(0, 'start_time')] - self.env.now)
 
             # record: part_created
-            record(self.event_tracer, self.env.now, self.name, part_id=part.id, event="part_created")
+            self.Monitor.record(self.env.now, self.name, part_id=part.id, event="part_created")
 
             # next process
             next_process = part.data[(part.step, 'process')]
+
+            # record: part_transferred
+            self.Monitor.record(self.env.now, self.name, part_id=part.id, event="part_transferred")
+
             yield self.env.process(self.process_dict[next_process].put(part, self.name, 0))
             self.parts_sent += 1
-            # record: part_transferred
-            record(self.event_tracer, self.env.now, self.name, part_id=part.id, event="part_transferred")
 
             if self.parts_sent == len(self.block_data):
                 print("all parts are sent")
@@ -54,14 +56,15 @@ class Source(object):
 
 
 class Process(object):
-    def __init__(self, env, name, server_num, process_dict, event_tracer, process_time=None, qlimit=float('inf'), routing_logic="cyclic"):
+    def __init__(self, env, name, server_num, process_dict, monitor, process_time=None, qlimit=float('inf'), routing_logic="cyclic"):
         self.env = env
         self.name = name
         self.server_process_time = process_time[self.name] if process_time is not None else [None for _ in range(server_num)]
         self.server_num = server_num
-        self.event_tracer = event_tracer
+        self.event_tracer = None
+        self.Monitor = monitor
         self.process_dict = process_dict
-        self.server = [SubProcess(env, self.name, '{0}_{1}'.format(self.name, i), process_dict, self.server_process_time[i], self.event_tracer) for i in range(server_num)]
+        self.server = [SubProcess(env, self.name, '{0}_{1}'.format(self.name, i), process_dict, self.server_process_time[i], self.Monitor) for i in range(server_num)]
         self.qlimit = qlimit
         self.routing_logic = routing_logic
 
@@ -87,13 +90,13 @@ class Process(object):
         if queue + server >= self.qlimit:
             self.server[self.server_idx].waiting.append(self.env.event())
             # record: delay_start
-            record(self.event_tracer, self.env.now, process_from, part_id=part.id, event="delay_start")
+            self.Monitor.record(self.env.now, process_from, part_id=part.id, event="delay_start")
 
             yield self.server[self.server_idx].waiting[-1]
             # record: delay_finish
-            record(self.event_tracer, self.env.now, process_from, part_id=part.id, event="delay_finish")
+            self.Monitor.record(self.env.now, process_from, part_id=part.id, event="delay_finish")
 
-        record(self.event_tracer, self.env.now, self.server[self.server_idx].name, part_id=part.id, event="queue_entered")
+        self.Monitor.record(self.env.now, self.server[self.server_idx].name, part_id=part.id, event="queue_entered")
         self.server[self.server_idx].sub_queue.put(part)
 
     def get_num_of_part(self):
@@ -108,13 +111,13 @@ class Process(object):
 
 
 class SubProcess(object):
-    def __init__(self, env, process_name, server_name, process_dict, process_time, event_tracer):
+    def __init__(self, env, process_name, server_name, process_dict, process_time, monitor):
         self.env = env
         self.process_name = process_name  # Process 이름
         self.name = server_name  # 해당 SubProcess의 id
         self.process_dict = process_dict
         self.process_time = process_time
-        self.event_tracer = event_tracer
+        self.Monitor = monitor
 
         # SubProcess 실행
         self.action = env.process(self.run())
@@ -128,11 +131,11 @@ class SubProcess(object):
         while True:
             # queue로부터 part 가져오기
             self.part = yield self.sub_queue.get()
-            record(self.event_tracer, self.env.now, self.name, part_id=self.part.id, event="queue_released")
+            self.Monitor.record(self.env.now, self.name, part_id=self.part.id, event="queue_released")
             self.flag = True
 
             # record: work_start
-            record(self.event_tracer, self.env.now, self.name, part_id=self.part.id, event="work_start")
+            self.Monitor.record(self.env.now, self.name, part_id=self.part.id, event="work_start")
 
             # work start
             self.working_start = self.env.now
@@ -146,7 +149,7 @@ class SubProcess(object):
             yield self.env.timeout(proc_time)
 
             # record: work_finish
-            record(self.event_tracer, self.env.now, self.name, part_id=self.part.id, event="work_finish")
+            self.Monitor.record(self.env.now, self.name, part_id=self.part.id, event="work_finish")
 
             step = 0
             while (self.part.data[(self.part.step + step + 1, 'process_time')] == 0) \
@@ -156,13 +159,15 @@ class SubProcess(object):
                 step += 1
 
             next_process = self.part.data[(self.part.step + step, 'process')]
+
+            # record: part_transferred
+            self.Monitor.record(self.env.now, self.name, part_id=self.part.id, event="part_transferred")
+
             if self.process_dict[next_process].__class__.__name__ == 'Process':
                 yield self.env.process(self.process_dict[next_process].put(self.part, self.name, step))
             else:
                 self.process_dict[next_process].put(self.part)
             self.process_dict[self.process_name].parts_sent += 1
-            # record: part_transferred
-            record(self.event_tracer, self.env.now, self.name, part_id=self.part.id, event="part_transferred")
 
             self.flag = False
 
@@ -176,10 +181,10 @@ class SubProcess(object):
 
 
 class Sink(object):
-    def __init__(self, env, name, event_tracer):
+    def __init__(self, env, name, monitor):
         self.env = env
         self.name = name
-        self.event_tracer = event_tracer
+        self.Monitor = monitor
 
         self.parts_rec = 0
         self.last_arrival = 0.0
@@ -187,7 +192,7 @@ class Sink(object):
     def put(self, part):
         self.parts_rec += 1
         self.last_arrival = self.env.now
-        record(self.event_tracer, self.env.now, self.name, part_id=part.id, event="completed")
+        self.Monitor.record(self.env.now, self.name, part_id=part.id, event="completed")
 
 
 class Routing(object):
@@ -210,4 +215,20 @@ class Routing(object):
 
 def record(event_tracer, time, process, part_id=None, event=None):
     event_tracer.loc[len(event_tracer)] = [time, event, part_id, process]
+
+
+class Monitor(object):
+    def __init__(self, filename, data_len):
+        self.filename = filename
+        self.record_event = open(filename, 'wt')
+        self.data_len = data_len
+        self.parts_rec = 0
+
+    def record(self, time, process, part_id=None, event=None):
+        self.record_event.write('{0} {1} {2} {3} \n'.format(time, event, part_id, process))
+        if event == 'completed':
+            self.parts_rec += 1
+
+        if self.parts_rec == self.data_len:
+            self.record_event.close()
 

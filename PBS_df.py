@@ -4,7 +4,7 @@ import scipy.stats as st
 import simpy
 import time
 
-from SimComponents_rev import Source, Sink, Process
+from SimComponents_rev import Source, Sink, Process, Monitor
 
 # 코드 실행 시작 시각
 start_run = time.time()
@@ -46,18 +46,18 @@ env = simpy.Environment()
 ##
 model = {}
 server_num = [1 for _ in range(len(process_list))]
-event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS"])
+Monitor = Monitor('event_log_PBS', len(df))
 
 # Modeling
 # Source
-Source = Source(env, 'Source', df, model, event_tracer)
+Source = Source(env, 'Source', df, model, Monitor)
 
 # process modeling
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', event_tracer)
+        model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, event_tracer, qlimit=1)
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, qlimit=1)
 
 # Simulation
 start = time.time()  # 시뮬레이션 실행 시작 시각
@@ -75,53 +75,53 @@ print("simulation execution time :", finish - start)
 
 # 총 리드타임 - 마지막 part가 Sink에 도달하는 시간
 
-# save data
-save_path = './result'
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
-# event tracer 저장
-event_tracer.to_excel(save_path +'/event_PBS_000.xlsx')
-print("Total Lead Time: ", model['Sink'].last_arrival)
-
-from PostProcessing_rev import Utilization, LeadTime, Idle, Throughput, Gantt, SUBWIP, WIP
-process_list_0 = ["plate_weld_0", "saw_front_0", "turn_over_0", "saw_back_0", "longi_attach_0", "longi_weld_0", "sub_assy_0"]
-
-#가동률 계산
-#Utilization = Utilization(event_tracer, model, "sub_assy")
-#util = Utilization.utilization()
-#print("Utilization = ", util)
-
-#Leadtime 계산
-Leadtime = LeadTime(event_tracer)
-lead = Leadtime.avg_LT()
-print("Leadtime = ", lead)
-
-#idle 계산
-#Idle = Idle(event_tracer, model, "sub_assy")
-#idle = Idle.idle()
-#print("Idle = ", idle)
-
-#Throughput 계산
-Throughput = Throughput(event_tracer, "sub_assy_0")
-th = Throughput.throughput()
-print("Throughput = ",th)
-
-#특정 시점 WIP 계산
-time = 100
-Wip = WIP(event_tracer, process_list_0, time)
-w = Wip.wip()
-print("WIP at",time," = ", w)
-
-
-#특정 시점 SubWIP 계산
-for i in range(len(process_list_0)):
-    Subwip = SUBWIP(event_tracer, process_list_0[i], time)
-    subwip = Subwip.subwip()
-    print("SubWIP of",process_list_0[i],"at", time, " = ", subwip)
-
-#Gantt Chart 그리기
-# process list
-
-Gantt = Gantt(event_tracer, process_list_0)
-gt = Gantt.gantt()
+# # save data
+# save_path = './result'
+# if not os.path.exists(save_path):
+#     os.makedirs(save_path)
+#
+# # event tracer 저장
+# event_tracer.to_excel(save_path +'/event_PBS_000.xlsx')
+# print("Total Lead Time: ", model['Sink'].last_arrival)
+#
+# from PostProcessing_rev import Utilization, LeadTime, Idle, Throughput, Gantt, SUBWIP, WIP
+# process_list_0 = ["plate_weld_0", "saw_front_0", "turn_over_0", "saw_back_0", "longi_attach_0", "longi_weld_0", "sub_assy_0"]
+#
+# #가동률 계산
+# #Utilization = Utilization(event_tracer, model, "sub_assy")
+# #util = Utilization.utilization()
+# #print("Utilization = ", util)
+#
+# #Leadtime 계산
+# Leadtime = LeadTime(event_tracer)
+# lead = Leadtime.avg_LT()
+# print("Leadtime = ", lead)
+#
+# #idle 계산
+# #Idle = Idle(event_tracer, model, "sub_assy")
+# #idle = Idle.idle()
+# #print("Idle = ", idle)
+#
+# #Throughput 계산
+# Throughput = Throughput(event_tracer, "sub_assy_0")
+# th = Throughput.throughput()
+# print("Throughput = ",th)
+#
+# #특정 시점 WIP 계산
+# time = 100
+# Wip = WIP(event_tracer, process_list_0, time)
+# w = Wip.wip()
+# print("WIP at",time," = ", w)
+#
+#
+# #특정 시점 SubWIP 계산
+# for i in range(len(process_list_0)):
+#     Subwip = SUBWIP(event_tracer, process_list_0[i], time)
+#     subwip = Subwip.subwip()
+#     print("SubWIP of",process_list_0[i],"at", time, " = ", subwip)
+#
+# #Gantt Chart 그리기
+# # process list
+#
+# Gantt = Gantt(event_tracer, process_list_0)
+# gt = Gantt.gantt()
