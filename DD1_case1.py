@@ -10,12 +10,12 @@ import numpy as np
 import time
 import os
 
-from SimComponents_rev import Source, Sink, Process
+from SimComponents_rev import Source, Sink, Process, Monitor
 
 start_run = time.time()
 
 server_num = 1
-blocks = 1000
+blocks = 10000
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -41,15 +41,18 @@ data = pd.concat([df_part, data], axis=1)
 env = simpy.Environment()
 model = {}  # process_dict
 process_time = {"Process1": [10.0]}  # server에 할당할 process time
-event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS"])
 
-Source = Source(env, 'Source', data, model, event_tracer)
+# Monitor
+filename = './result/event_log_DD1_1.csv'
+Monitor = Monitor(filename, blocks)
+
+Source = Source(env, 'Source', data, model, Monitor)
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', event_tracer)
+        model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, event_tracer, process_time=process_time, qlimit=10)
+        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, Monitor, process_time=process_time, qlimit=10)
 
 start_sim = time.time()
 env.run()
@@ -64,14 +67,6 @@ print("data pre-processing : ", start_sim - start_run)  # 시뮬레이션 시작
 print("total time : ", finish_sim - start_run)
 print("simulation execution time :", finish_sim - start_sim)  # 시뮬레이션 종료 시각
 
-
-# save data
-save_path = './result'
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
-event_tracer.to_excel(save_path +'/DD1_case1.xlsx')
-
 # Post-Processing
 from PostProcessing_rev import Utilization, LeadTime
 print('#' * 80)
@@ -79,15 +74,13 @@ print("Post-Processing")
 print("D/D/1 Case 1")
 print("IAT: 10s, Service Time: 10s")
 
+event_tracer = pd.read_csv(filename)
+
 # 가동률
 print('#' * 80)
 utilization = Utilization(event_tracer, model, "Process1")
 print("utilization of Process1: ", utilization.utilization())
 
-# Avg.Lead time
-print('#' * 80)
-leadtime = LeadTime(event_tracer)
-print("Average Lead time: ", leadtime.avg_LT())
 
 
 
