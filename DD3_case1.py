@@ -10,12 +10,12 @@ import numpy as np
 import time
 import os
 
-from SimComponents_rev import Source, Sink, Process
+from SimComponents_rev import Source, Sink, Process, Monitor
 
 start_run = time.time()
 
 server_num = 3
-blocks = 100 # Run_time / IAT
+blocks = 10000
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -41,15 +41,18 @@ data = pd.concat([df_part, data], axis=1)
 env = simpy.Environment()
 model = {}
 process_time = {"Process1": [10.0, 10.0, 10.0]}
-event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS"])
 
-Source = Source(env, 'Source', data, model, event_tracer)
+# Monitoring
+filename = './result/event_log_DD3_1.csv'
+Monitor = Monitor(filename, blocks)
+
+Source = Source(env, 'Source', data, model, Monitor)
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', event_tracer)
+        model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, event_tracer, process_time=process_time, routing_logic="most_unutilized")
+        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, Monitor, process_time=process_time)
 
 start_sim = time.time()
 env.run()
@@ -64,16 +67,9 @@ print("data pre-processing : ", start_sim - start_run)  # 시뮬레이션 시작
 print("total time : ", finish_sim - start_run)
 print("simulation execution time :", finish_sim - start_sim)  # 시뮬레이션 종료 시각
 
-
-# save data
-save_path = './result'
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
-event_tracer.to_excel(save_path +'/DD3_case1.xlsx')
-
 # Post-Processing
 from PostProcessing_rev import Utilization, LeadTime
+event_tracer = pd.read_csv(filename)
 utilization_process = Utilization(event_tracer, model, "Process1")
 print('#' * 80)
 print("Post-Processing")
@@ -86,8 +82,8 @@ print("utilization of Process1: ", utilization_process.utilization())
 for i in range(server_num):
     utilization_server = Utilization(event_tracer, model, model["Process1"].server[i].name)
     print("utilization of server {0}: ".format(i), utilization_server.utilization())
-
-# Avg.Lead time
-print('#' * 80)
-leadtime = LeadTime(event_tracer)
-print("Average Lead time: ", leadtime.avg_LT())
+#
+# # Avg.Lead time
+# print('#' * 80)
+# leadtime = LeadTime(event_tracer)
+# print("Average Lead time: ", leadtime.avg_LT())
