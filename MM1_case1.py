@@ -3,7 +3,6 @@ M/M/1 Case 1
 Run time: 1000s
 Source IAT = uniform(30, 60)
 Server service time: exponential distribution(50)
-??: Sink delay time
 '''
 import simpy
 import pandas as pd
@@ -14,12 +13,12 @@ import random
 import time
 import os
 
-from SimComponents_rev import Source, Sink, Process
+from SimComponents_rev import Source, Sink, Process, Monitor
 
 start_run = time.time()
 
 server_num = 1
-blocks = 1000  # Run_time / IAT
+blocks = 10000  # Run_time / IAT
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -52,15 +51,18 @@ service_time = functools.partial(np.random.exponential, 50)
 env = simpy.Environment()
 model = {}  # process_dict
 process_time = {"Process1": [service_time]}  # server에 할당할 process time
-event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS"])
 
-Source = Source(env, 'Source', data, model, event_tracer)
+# Monitoring
+filename = './result/event_log_MM1.csv'
+Monitor = Monitor(filename, blocks)
+
+Source = Source(env, 'Source', data, model, Monitor)
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', event_tracer)
+        model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, event_tracer, process_time=process_time, qlimit=10)
+        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, Monitor, process_time=process_time)
 
 start_sim = time.time()
 env.run()
@@ -75,14 +77,6 @@ print("data pre-processing : ", start_sim - start_run)  # 시뮬레이션 시작
 print("total time : ", finish_sim - start_run)
 print("simulation execution time :", finish_sim - start_sim)  # 시뮬레이션 종료 시각
 
-
-# save data
-save_path = './result'
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
-event_tracer.to_excel(save_path +'/MM1_case1.xlsx')
-
 # Post-Processing
 from PostProcessing_rev import Utilization, LeadTime, Idle
 print('#' * 80)
@@ -92,17 +86,18 @@ print("IAT: uniform(30, 60), Service Time: exponential(50)")
 
 # 가동률
 print('#' * 80)
+event_tracer = pd.read_csv(filename)
 utilization = Utilization(event_tracer, model, "Process1")
 print("utilization of Process1: ", utilization.utilization())
 
-# Avg.Lead time
-print('#' * 80)
-leadtime = LeadTime(event_tracer)
-print("Average Lead time: ", leadtime.avg_LT())
-
-# Idle time
-Idle = Idle(event_tracer, model, "Process1")
-print("Idle time: ", Idle.idle())
+# # Avg.Lead time
+# print('#' * 80)
+# leadtime = LeadTime(event_tracer)
+# print("Average Lead time: ", leadtime.avg_LT())
+#
+# # Idle time
+# Idle = Idle(event_tracer, model, "Process1")
+# print("Idle time: ", Idle.idle())
 
 
 
