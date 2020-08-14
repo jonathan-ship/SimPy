@@ -220,12 +220,13 @@ def record(event_tracer, time, process, part_id=None, event=None):
 class Monitor(object):
     def __init__(self, filename, data_len):
         self.filename = filename
-        self.record_event = open(filename, 'wt')
+        self.record_event = open(filename, 'w+', encoding='utf-8')
+        self.record_event.write('TIME,EVENT,PART_ID,PROCESS')
         self.data_len = data_len
         self.parts_rec = 0
 
     def record(self, time, process, part_id=None, event=None):
-        self.record_event.write('{0} {1} {2} {3} \n'.format(time, event, part_id, process))
+        self.record_event.write('\n{0},{1},{2},{3}'.format(time, event, part_id, process))
         if event == 'completed':
             self.parts_rec += 1
 
