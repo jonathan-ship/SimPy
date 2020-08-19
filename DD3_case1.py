@@ -15,7 +15,7 @@ from SimComponents_rev import Source, Sink, Process, Monitor
 start_run = time.time()
 
 server_num = 3
-blocks = 10000
+blocks = 1000
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -52,10 +52,11 @@ for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, Monitor, process_time=process_time)
+        model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
+                                                    process_time=process_time)
 
 start_sim = time.time()
-env.run()
+env.run(until=1001)
 finish_sim = time.time()
 
 print('#' * 80)
@@ -68,7 +69,7 @@ print("total time : ", finish_sim - start_run)
 print("simulation execution time :", finish_sim - start_sim)  # 시뮬레이션 종료 시각
 
 # Post-Processing
-from PostProcessing_rev import Utilization, LeadTime
+from PostProcessing_rev import Utilization, LeadTime, WIP
 event_tracer = pd.read_csv(filename)
 utilization_process = Utilization(event_tracer, model, "Process1")
 print('#' * 80)
@@ -78,12 +79,22 @@ print("IAT: 10s, Service Time: 10s, 10s, 10s")
 
 # 가동률
 print('#' * 80)
-print("utilization of Process1: ", utilization_process.utilization())
+# Process
+u, idle, working_time = utilization_process.utilization()
+print("idle time of Process1: ", idle)
+print("total working time of Process1: ", working_time)
+print("utilization of Process1: ", u)
+
+# Server
 for i in range(server_num):
     utilization_server = Utilization(event_tracer, model, model["Process1"].server[i].name)
-    print("utilization of server {0}: ".format(i), utilization_server.utilization())
-#
-# # Avg.Lead time
-# print('#' * 80)
-# leadtime = LeadTime(event_tracer)
-# print("Average Lead time: ", leadtime.avg_LT())
+    u, _, _ = utilization_server.utilization()
+    print("utilization of Server {0}: ".format(i), u)
+
+# Lead Time
+lead_time = LeadTime(event_tracer)
+print("average lead time: ", lead_time.avg_LT())
+
+# WIP
+wip_m = WIP(event_tracer, WIP_type="WIP_m")
+print("WIP of entire model: ", np.mean(wip_m.cal_wip()))

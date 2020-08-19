@@ -74,7 +74,7 @@ process_dict['Sink'] = Sink
 # Run it
 start = time.time()  # 시뮬레이션 시작 시각
 env.run()
-finish = time.time()  # 시뮬레이션 종료 시각 
+finish = time.time()  # 시뮬레이션 종료 시각
 
 print('#' * 80)
 print("Results of simulation")

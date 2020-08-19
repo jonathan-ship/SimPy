@@ -18,7 +18,7 @@ from SimComponents_rev import Source, Sink, Process, Monitor
 start_run = time.time()
 
 server_num = 1
-blocks = 10000  # Run_time / IAT
+blocks = 1000
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -78,26 +78,29 @@ print("total time : ", finish_sim - start_run)
 print("simulation execution time :", finish_sim - start_sim)  # 시뮬레이션 종료 시각
 
 # Post-Processing
-from PostProcessing_rev import Utilization, LeadTime, Idle
+from PostProcessing_rev import Utilization, LeadTime, WIP
 print('#' * 80)
 print("Post-Processing")
 print("M/M/1 Case 1")
 print("IAT: uniform(30, 60), Service Time: exponential(50)")
 
+event_tracer = pd.read_csv(filename)
+
 # 가동률
 print('#' * 80)
-event_tracer = pd.read_csv(filename)
 utilization = Utilization(event_tracer, model, "Process1")
-print("utilization of Process1: ", utilization.utilization())
+u, idle, working_time = utilization.utilization()
+print("idle time of Process1: ", idle)
+print("total working time of Process1: ", working_time)
+print("utilization of Process1: ", u)
 
-# # Avg.Lead time
-# print('#' * 80)
-# leadtime = LeadTime(event_tracer)
-# print("Average Lead time: ", leadtime.avg_LT())
-#
-# # Idle time
-# Idle = Idle(event_tracer, model, "Process1")
-# print("Idle time: ", Idle.idle())
+# Lead Time
+lead_time = LeadTime(event_tracer)
+print("average lead time: ", lead_time.avg_LT())
+
+# WIP
+wip_m = WIP(event_tracer, WIP_type="WIP_m")
+print("WIP of entire model: ", np.mean(wip_m.cal_wip()))
 
 
 

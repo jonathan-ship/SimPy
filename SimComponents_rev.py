@@ -91,6 +91,8 @@ class Process(object):
             self.server[self.server_idx].waiting.append(self.env.event())
             # record: delay_start
             self.Monitor.record(self.env.now, process_from, part_id=part.id, event="delay_start")
+            if (part.id == "U611 L12C") & (process_from == "HA011_0"):
+                print("1")
 
             yield self.server[self.server_idx].waiting[-1]
             # record: delay_finish
@@ -204,12 +206,16 @@ class Routing(object):
 
     def most_unutilized(self):
         from PostProcessing_rev import Utilization
+        import random
+
         utilization_list = []
         for i in range(self.server_num):
             utilization = Utilization(self.event_tracer, self.process.process_dict, self.server[i].name)
-            server_utilization = utilization.utilization()
+            server_utilization, _, _ = utilization.utilization()
             utilization_list.append(server_utilization)
-        idx_min = np.argmin(utilization_list)
+        idx_min_list = np.argwhere(utilization_list == np.min(utilization_list))
+        idx_min_list = idx_min_list.flatten().tolist()
+        idx_min = random.choice(idx_min_list)
         return idx_min
 
 
