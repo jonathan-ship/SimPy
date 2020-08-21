@@ -14,7 +14,7 @@ data_all = pd.read_csv('./data/PBS_assy_sequence_gen_fin.csv')
 data = data_all[["product", "plate_weld", "saw_front", "turn_over", "saw_back", "longi_attach", "longi_weld", "sub_assy"]]
 
 # process list
-process_list = ["plate_weld", "saw_front", "turn_over", "saw_back", "longi_attach", "longi_weld", "sub_assy"]
+process_list = ["plate_weld", "saw_front", "saw_back", "longi_attach", "longi_weld", "sub_assy"]
 
 # DATA PRE-PROCESSING
 # part 정보
@@ -46,7 +46,8 @@ env = simpy.Environment()
 ##
 model = {}
 server_num = [1 for _ in range(len(process_list))]
-Monitor = Monitor('event_log_PBS', len(df))
+filename = './result/event_log_PBS.csv'
+Monitor = Monitor(filename, len(df))
 
 # Modeling
 # Source
@@ -73,55 +74,11 @@ print("data pre-processing : ", start - start_run)
 print("total time : ", finish - start_run)
 print("simulation execution time :", finish - start)
 
-# 총 리드타임 - 마지막 part가 Sink에 도달하는 시간
+print('#' * 80)
+from PostProcessing_rev import Utilization, WIP
+event_tracer = pd.read_csv(filename)
+for process in process_list:
+    util = Utilization(event_tracer, model, process, model['Sink'].last_arrival)
+    u, _, _ = util.utilization()
+    print("utilization of {0}: ".format(process), u)
 
-# # save data
-# save_path = './result'
-# if not os.path.exists(save_path):
-#     os.makedirs(save_path)
-#
-# # event tracer 저장
-# event_tracer.to_excel(save_path +'/event_PBS_000.xlsx')
-# print("Total Lead Time: ", model['Sink'].last_arrival)
-#
-# from PostProcessing_rev import Utilization, LeadTime, Idle, Throughput, Gantt, SUBWIP, WIP
-# process_list_0 = ["plate_weld_0", "saw_front_0", "turn_over_0", "saw_back_0", "longi_attach_0", "longi_weld_0", "sub_assy_0"]
-#
-# #가동률 계산
-# #Utilization = Utilization(event_tracer, model, "sub_assy")
-# #util = Utilization.utilization()
-# #print("Utilization = ", util)
-#
-# #Leadtime 계산
-# Leadtime = LeadTime(event_tracer)
-# lead = Leadtime.avg_LT()
-# print("Leadtime = ", lead)
-#
-# #idle 계산
-# #Idle = Idle(event_tracer, model, "sub_assy")
-# #idle = Idle.idle()
-# #print("Idle = ", idle)
-#
-# #Throughput 계산
-# Throughput = Throughput(event_tracer, "sub_assy_0")
-# th = Throughput.throughput()
-# print("Throughput = ",th)
-#
-# #특정 시점 WIP 계산
-# time = 100
-# Wip = WIP(event_tracer, process_list_0, time)
-# w = Wip.wip()
-# print("WIP at",time," = ", w)
-#
-#
-# #특정 시점 SubWIP 계산
-# for i in range(len(process_list_0)):
-#     Subwip = SUBWIP(event_tracer, process_list_0[i], time)
-#     subwip = Subwip.subwip()
-#     print("SubWIP of",process_list_0[i],"at", time, " = ", subwip)
-#
-# #Gantt Chart 그리기
-# # process list
-#
-# Gantt = Gantt(event_tracer, process_list_0)
-# gt = Gantt.gantt()

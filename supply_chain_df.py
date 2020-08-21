@@ -58,10 +58,10 @@ process_list += list(data.drop_duplicates(['process2'])['process2'])
 model = {}
 server_num = [1 for _ in range(len(process_list))]
 
-# Source modeling
-Monitor = Monitor('event_log_supply_chain', len(df))
-Source = Source(env, 'Source', df, model, Monitor)
+filename = './result/event_log_supply_chain.csv'
+Monitor = Monitor(filename, len(df))
 
+Source = Source(env, 'Source', df, model, Monitor)
 
 # process modeling
 for i in range(len(process_list) + 1):
@@ -91,3 +91,9 @@ print("simulation execution time :", finish - start)
 #
 # # event tracer 저장
 # event_tracer.to_excel(save_path +'/event_supply_chain.xlsx')
+#
+# event_tracer = pd.read_csv(filename)
+
+# from PostProcessing_rev import Utilization
+# u = Utilization(event_tracer, model, process_list[0], model['Sink'].last_arrival)
+# print(process_list[0], ": ", u.utilization())

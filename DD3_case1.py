@@ -15,7 +15,7 @@ from SimComponents_rev import Source, Sink, Process, Monitor
 start_run = time.time()
 
 server_num = 3
-blocks = 1000
+blocks = 10000
 
 # df_part: part_id
 df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
@@ -53,10 +53,10 @@ for i in range(len(process_list) + 1):
         model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
         model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
-                                                    process_time=process_time)
+                                                    process_time=process_time, routing_logic="most_unutilized")
 
 start_sim = time.time()
-env.run(until=1001)
+env.run(until=1000)
 finish_sim = time.time()
 
 print('#' * 80)
@@ -71,7 +71,7 @@ print("simulation execution time :", finish_sim - start_sim)  # 시뮬레이션 
 # Post-Processing
 from PostProcessing_rev import Utilization, LeadTime, WIP
 event_tracer = pd.read_csv(filename)
-utilization_process = Utilization(event_tracer, model, "Process1")
+utilization_process = Utilization(event_tracer, model, "Process1", model['Sink'].last_arrival)
 print('#' * 80)
 print("Post-Processing")
 print("D/D/3 Case 1")
@@ -87,7 +87,7 @@ print("utilization of Process1: ", u)
 
 # Server
 for i in range(server_num):
-    utilization_server = Utilization(event_tracer, model, model["Process1"].server[i].name)
+    utilization_server = Utilization(event_tracer, model, model["Process1"].server[i].name, model['Sink'].last_arrival)
     u, _, _ = utilization_server.utilization()
     print("utilization of Server {0}: ".format(i), u)
 

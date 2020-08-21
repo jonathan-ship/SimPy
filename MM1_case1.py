@@ -65,7 +65,7 @@ for i in range(len(process_list) + 1):
         model['Process{0}'.format(i+1)] = Process(env, 'Process{0}'.format(i+1), server_num, model, Monitor, process_time=process_time)
 
 start_sim = time.time()
-env.run()
+env.run(until=20000)
 finish_sim = time.time()
 
 print('#' * 80)
@@ -88,7 +88,7 @@ event_tracer = pd.read_csv(filename)
 
 # 가동률
 print('#' * 80)
-utilization = Utilization(event_tracer, model, "Process1")
+utilization = Utilization(event_tracer, model, "Process1", model['Sink'].last_arrival)
 u, idle, working_time = utilization.utilization()
 print("idle time of Process1: ", idle)
 print("total working time of Process1: ", working_time)

@@ -92,7 +92,7 @@ event_tracer = pd.read_csv(filename)
 # 가동률
 print('#' * 80)
 # Process
-utilization_process = Utilization(event_tracer, model, "Process1")
+utilization_process = Utilization(event_tracer, model, "Process1", model['Sink'].last_arrival)
 u, idle, working_time = utilization_process.utilization()
 print("idle time of Process1: ", idle)
 print("total working time of Process1: ", working_time)
@@ -100,7 +100,7 @@ print("utilization of Process1: ", u)
 
 # Server
 for i in range(server_num):
-    utilization_server = Utilization(event_tracer, model, model["Process1"].server[i].name)
+    utilization_server = Utilization(event_tracer, model, model["Process1"].server[i].name, model['Sink'].last_arrival)
     u, _, _ = utilization_server.utilization()
     print("utilization of Server {0}: ".format(i), u)
 

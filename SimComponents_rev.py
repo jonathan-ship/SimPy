@@ -73,7 +73,7 @@ class Process(object):
 
     def put(self, part, process_from, step):
         # Routing
-        routing = Routing(self.Monitor.filename, self.process_dict[self.name])
+        routing = Routing(self.env, self.Monitor.filename, self.process_dict[self.name])
         if self.routing_logic == "most_unutilized":  # most_unutilized
             self.server_idx = routing.most_unutilized()
         else:
@@ -91,9 +91,6 @@ class Process(object):
             self.server[self.server_idx].waiting.append(self.env.event())
             # record: delay_start
             self.Monitor.record(self.env.now, process_from, part_id=part.id, event="delay_start")
-            if (part.id == "U611 L12C") & (process_from == "HA011_0"):
-                print("1")
-
             yield self.server[self.server_idx].waiting[-1]
             # record: delay_finish
             self.Monitor.record(self.env.now, process_from, part_id=part.id, event="delay_finish")
@@ -198,7 +195,8 @@ class Sink(object):
 
 
 class Routing(object):
-    def __init__(self, filename, process):
+    def __init__(self, env, filename, process):
+        self.env = env
         self.process = process  # routing logic을 적용할 process
         self.server = self.process.server
         self.server_num = self.process.server_num
@@ -210,7 +208,7 @@ class Routing(object):
 
         utilization_list = []
         for i in range(self.server_num):
-            utilization = Utilization(self.event_tracer, self.process.process_dict, self.server[i].name)
+            utilization = Utilization(self.event_tracer, self.process.process_dict, self.server[i].name, self.env.now)
             server_utilization, _, _ = utilization.utilization()
             utilization_list.append(server_utilization)
         idx_min_list = np.argwhere(utilization_list == np.min(utilization_list))
