@@ -69,7 +69,7 @@ for i in range(len(process_list) + 1):
                                                     process_time=process_time, routing_logic="most_unutilized")
 
 start_sim = time.time()
-env.run()
+env.run(until=20000)
 finish_sim = time.time()
 
 print('#' * 80)

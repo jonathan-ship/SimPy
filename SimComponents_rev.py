@@ -200,7 +200,7 @@ class Routing(object):
         self.process = process  # routing logic을 적용할 process
         self.server = self.process.server
         self.server_num = self.process.server_num
-        self.event_tracer = pd.read_csv(filename)
+        self.event_tracer = pd.read_csv(filename, encoding="CP949")
 
     def most_unutilized(self):
         from PostProcessing_rev import Utilization
@@ -220,7 +220,7 @@ class Routing(object):
 class Monitor(object):
     def __init__(self, filename, data_len):
         self.filename = filename
-        with open(self.filename, 'w', encoding='utf-8') as f:
+        with open(self.filename, 'w') as f:
             f.write('TIME,EVENT,PART,PROCESS')
 
     def record(self, time, process, part_id=None, event=None):
