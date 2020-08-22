@@ -150,12 +150,12 @@ class SubProcess(object):
             # record: work_finish
             self.Monitor.record(self.env.now, self.name, part_id=self.part.id, event="work_finish")
 
-            step = 0
-            while (self.part.data[(self.part.step + step + 1, 'process_time')] == 0) \
-                    and (self.part.data[(self.part.step + step + 1, 'process')] != 'Sink'):
-                step += 1
-            if step == 0:
-                step += 1
+            step = 1
+            while not self.part.data[(self.part.step + step, 'process_time')]:
+                if self.part.data[(self.part.step + step, 'process')] != 'Sink':
+                    step += 1
+                else:
+                    break
 
             next_process = self.part.data[(self.part.step + step, 'process')]
 
