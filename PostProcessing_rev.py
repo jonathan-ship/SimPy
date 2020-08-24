@@ -1,136 +1,81 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import math as m
-import gantt
-import time
-from datetime import date, timedelta
-
-import sys
-sys.path.insert(0, 'c:\pyzo2015a\lib\site-packages\plotly')
-import plotly as py
-import plotly.figure_factory as ff
 
 
-class Utilization(object):
-    def __init__(self, data, process_dict, process, time_finish):
-        self.data = data
-        self.process_dict = process_dict
-        self.process = process  # utilization을 계산할 Process 혹은 Server
-        self.type = "Process" if process in process_dict.keys() else "Server"
-        self.time_finish = time_finish
+def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0,):
+    total_time = 0.0
+    utilization, idle_time, working_time = 0.0, 0.0, 0.0
+    data = data[(data[type] == name) & ((data["Event"] == "work_start") | (data["Event"] == "work_finish"))]
+    data = data[(data["Time"] >= start_time) & (data["Time"] <= finish_time)]
 
-    # 공정에 관한 event 중 work_start인 event의 시간 저장 (총 시간 계산, working time 시간 계산 시 사용)
-    # 공정에 관한 event 중 part_transferred인 event의 시간 저장 (총 시간 계산)
-    # 공정에 관한 event 중 work_finish인 event의 시간 저장 (working time 시간 계산 시 사용)
-    def utilization(self):
-        idx = self.data["PROCESS"].map(lambda x: self.process in x)
-        self.data = self.data.rename(index=idx)
-        if True not in self.data.index:
-            u, idle, working_time = 0, 0, 0
-            return u, idle, working_time
-        self.data = self.data.loc[True, :]
+    if len(data) == 0:
+        return utilization, idle_time, working_time
 
-        work_start = self.data["TIME"][self.data["EVENT"] == "work_start"]
-        work_finish = self.data["TIME"][self.data["EVENT"] == "work_finish"]
+    data_by_group = data.groupby(data['SubProcess'])
+    for i, group in data_by_group:
+        work_start = group[group['Event'] == "work_start"]
+        work_finish = group[group['Event'] == "work_finish"]
+        if len(work_start) == 0 and len(work_finish) == 0:
+            pass
+        elif len(work_start) != 0 and len(work_finish) == 0:
+            row = work_start.iloc[0]
+            row["Time"] = finish_time
+            row["Event"] = "work_finish"
+            work_finish = pd.DataFrame([row])
+        elif len(work_start) == 0 and len(work_finish) != 0:
+            row = work_finish.iloc[0]
+            row["Time"] = start_time
+            row["Event"] = "work_start"
+            work_start = pd.DataFrame([row])
+        else:
+            if work_start.iloc[0]["Part"] != work_finish.iloc[0]["Part"]:
+                row = work_finish.iloc[0]
+                row["Time"] = start_time
+                row["Event"] = "work_start"
+                work_start = pd.DataFrame([row]).append(work_start)
+            if work_start.iloc[-1]["Part"] != work_finish.iloc[-1]["Part"]:
+                row = work_start.iloc[-1]
+                row["Time"] = finish_time
+                row["Event"] = "work_finish"
+                work_finish = work_finish.append(pd.DataFrame([row]))
+        work_start = work_start["Time"].reset_index(drop=True)
+        work_finish = work_finish["Time"].reset_index(drop=True)
+        working_time += np.sum(work_finish - work_start)
+        total_time += (finish_time - start_time)
+    idle_time = total_time - working_time
+    utilization = working_time / total_time
 
-        work_start = work_start.reset_index(drop=True)
-        work_finish = work_finish.reset_index(drop=True)
-
-        if len(work_start) * len(work_finish) == 0:
-            u, idle, working_time = 0, 0, 0
-            return u, idle, working_time
-
-        # 총 가동 시간
-        server_num = self.process_dict[self.process].server_num if self.type == "Process" else 1
-        total_time = self.time_finish * server_num
-
-        # 총 작업 시간
-        df_working = work_finish - work_start
-        total_working = np.sum(df_working)
-
-        # 가동률
-        u = total_working / total_time
-        idle = total_time - total_working
-
-        return u, idle, total_working
-
-
-class LeadTime(object):
-    def __init__(self, data):
-        self.data = data  # Event Tracer
-        self.list_LT = []
-        self.part_list = list(data["PART"][data["EVENT"] == "part_created"])
-
-    def avg_LT(self):
-        for part in self.part_list:
-            part_data = self.data[self.data["PART"] == part]
-            df_part_start = part_data["TIME"][part_data["EVENT"] == "part_created"]
-            df_part_finish = part_data["TIME"][part_data["EVENT"] == "completed"]
-
-            df_part_start = df_part_start.reset_index(drop=True)
-            df_part_finish = df_part_finish.reset_index(drop=True)
-
-            if len(df_part_start) * len(df_part_finish) != 0:
-                self.list_LT.append(df_part_finish[0] - df_part_start[0])
-
-        return np.mean(self.list_LT)
+    return utilization, idle_time, working_time
 
 
-# class Idle(object):
-#     def __init__(self, data, process_dict, process):
-#         self.data = data
-#         self.process_dict = process_dict
-#         self.process = process  # utilization을 계산할 Process 혹은 Server
-#         self.type = "Process" if process in process_dict.keys() else "Server"
-#
-#     # 공정에 관한 event 중 work_start인 event의 시간 저장 (총 시간 계산, working time 시간 계산 시 사용)
-#     # 공정에 관한 event 중 part_transferred인 event의 시간 저장 (총 시간 계산)
-#     # 공정에 관한 event 중 work_finish인 event의 시간 저장 (working time 시간 계산 시 사용)
-#     def idle(self):
-#         idx = self.data["PROCESS"].map(lambda x: self.process in x)
-#         self.data = self.data.rename(index=idx)
-#         if True not in self.data.index:
-#             return 0
-#         self.data = self.data.loc[True, :]
-#
-#         work_start = self.data["TIME"][self.data["EVENT"] == "work_start"]
-#         part_transferred = self.data["TIME"][self.data["EVENT"] == "part_transferred"]
-#         work_finish = self.data["TIME"][self.data["EVENT"] == "work_finish"]
-#
-#         work_start = work_start.reset_index(drop=True)
-#         part_transferred = part_transferred.reset_index(drop=True)
-#         work_finish = work_finish.reset_index(drop=True)
-#
-#         # 총 가동 시간
-#         server_num = self.process_dict[self.process].server_num if self.type == "Process" else 1
-#         total_time = (part_transferred[len(part_transferred) - 1] - work_start[0]) * server_num
-#
-#         # 총 작업 시간
-#         df_working = work_finish - work_start
-#         total_working = np.sum(df_working)
-#
-#         # 가동률
-#         idle = total_time - total_working
-#         return idle
+def cal_leadtime(data, start_time=0.0, finish_time=0.0):
+    part_created = data[data["Event"] == "part_created"]
+    completed = data[data["Event"] == "completed"]
+
+    idx = (completed["Time"] >= start_time) & (completed["Time"] <= finish_time)
+    part_created = part_created[idx.to_list()].sort_values(["Part"])
+    completed = completed[idx.to_list()].sort_values(["Part"])
+    part_created = part_created["Time"].reset_index(drop=True)
+    completed = completed["Time"].reset_index(drop=True)
+
+    lead_time = completed - part_created
+    lead_time = np.mean(lead_time)
+
+    return lead_time
 
 
-class Throughput(object):
-    def __init__(self, data, process):
-        self.data = data  # Event Tracer
-        self.list_time = []
-        self.process = process
-        self.part_transferred = []
-        self.queue_entered = []
-
-    def throughput(self):
-       part_transferred = list(self.data["TIME"][(self.data["PROCESS"] == self.process) & (self.data["EVENT"] == "part_transferred")])
-       queue_entered = list(self.data["TIME"][(self.data["PROCESS"] == self.process) & (self.data["EVENT"] == "queue_entered")])
-
-       for i in range(len(part_transferred)-1):
-           self.list_time.append(part_transferred[i]-queue_entered[i])
-
-       total_time = np.mean(self.list_time)
-       return 1/total_time
+def cal_throughput(data, name, type, start_time=0.0, finish_time=0.0):
+    throughput = 0.0
+    part_transferred = data[(data[type] == name) & (data["Event"] == "part_transferred")]
+    part_transferred = part_transferred[(part_transferred["Time"] >= start_time) & (part_transferred["Time"] <= finish_time)]
+    if len(part_transferred) == 0:
+        return throughput
+    throughput = len(part_transferred) / (finish_time - start_time)
+    #data = data[(data[type] == name) & ((data["Event"] == "queue_entered") | (data["Event"] == "part_transferred"))]
+    #cycle_times = data["Time"].groupby(data["Part"]).diff().dropna()
+    #throughput = 1 / np.mean(cycle_times)
+    return throughput
 
 
 class WIP(object):
@@ -180,127 +125,4 @@ class WIP(object):
                 self.wip_list[j] += 1
 
         return self.wip_list
-
-
-
-
-
-
-
-
-
-
-
-#class Gantt(object):
-    # def __init__(self, data, process_list):
-
-      #  self.data = data
-       # self.process_list = process_list
-        #self.part_transferred = []
-       # self.queue_entered = []
-       # self.dataframe = []
-
-  #  def gantt(self):
-   #     for i in range(len(self.process_list)-1):
-    #       part_transferred = list(self.data["TIME"][(self.data["PROCESS"] == self.process_list[i]) & (self.data["EVENT"] == "part_transferred")])
-     #      queue_entered = list(self.data["TIME"][(self.data["PROCESS"] == self.process_list[i]) & (self.data["EVENT"] == "queue_entered")])
-
-
-
-      #     for j in range(len(part_transferred) - 1):
-       #         temp_dic = {'Task' : self.process_list[i], 'Start' : queue_entered[j], 'Finish' : part_transferred[j]}
-        #        self.dataframe.append(temp_dic)
-
-      #  fig = ff.create_gantt(self.dataframe)
-      #  py.offline.plot(fig, filename='gantt-numeric-variable.html')
-
-# class WIP:
-#     def __init__(self,data, process_list, time):
-#         self.data = data
-#         self.process_list = process_list
-#         self.time = time
-#         self.delay_start = []
-#         self.delay_finish = []
-#
-#     def wip(self):
-#         count_source = 0
-#         count_sink = 0
-#         count_delay = 0
-#
-#         a = 0
-#         while self.data["TIME"][a] <= self.time:
-#             if self.data["EVENT"][a] == "part_created":
-#                 count_source += 1
-#             a += 1
-#
-#         b = 0
-#         while self.data["TIME"][b] <= self.time:
-#             if self.data["EVENT"][b] == "completed":
-#                 count_sink += 1
-#             b += 1
-#
-#         for i in range(len(self.process_list)-1):
-#             self.delay_start = list(self.data["TIME"][(self.data["EVENT"] == "delay_start") & (self.data["PROCESS"] == self.process_list[i])])
-#             self.delay_finish = list(self.data["TIME"][(self.data["EVENT"] == "delay_finish") & (self.data["PROCESS"] == self.process_list[i])])
-#
-#         for i in range(len(self.delay_start)-1):
-#             if (self.delay_start[i] <= self.time) & (self.delay_finish[i] >= self.time):
-#                 count_delay += 1
-#
-#         wip = count_source - count_sink - count_delay
-#         return wip
-
-
-##시간대별로 dict만들어야할지?
-class SUBWIP:
-    def __init__(self, data, process, time):
-        self.data = data
-        self.process = process
-        self.time = time
-        self.work_start = []
-        self.work_finish = []
-
-    def subwip(self):
-        idx = self.data["PROCESS"].map(lambda x: self.process in x)
-        self.data = self.data.rename(index=idx)
-        if True not in self.data.index:
-            return 0
-        self.data = self.data.loc[True, :]
-
-        self.work_start = list(self.data["TIME"][self.data["EVENT"] == "work_start"])
-        self.work_finish = list(self.data["TIME"][self.data["EVENT"] == "work_finish"])
-
-        wip = 0
-        for i in range(len(self.work_start)-1):
-            if (self.work_start[i] <= self.time) & (self.time <= self.work_finish[i]):
-                wip += 1
-
-        return wip
-
-
-class Gantt(object):
-    def __init__(self, data, process_list):
-        self.data = data
-        self.process_list = process_list
-
-    def gantt(self):
-
-   # Change font default
-        gantt.define_font_attributes(fill='black', stroke='black', stroke_width=0, font_family="Verdana")
-    # Create some tasks
-        self.list_part = list(self.data["PART"][self.data["EVENT"] == "part_created"])
-
-        start = date(2020,8,11)
-        for part in self.list_part:
-            k = 1
-            part_data = self.data[self.data["PART"] == part]
-            part_start = list(part_data["TIME"][(part_data["EVENT"] == "queue_entered") | (part_data["EVENT"] == "part_created")])
-            part_finish = list(part_data["TIME"][part_data["EVENT"] == "part_transferred"])
-            for i in range(len(self.process_list)-1):
-                while k <= len(part_start)-1:
-                    t = gantt.Task(name=self.process_list[i], start = start + timedelta(days=part_start[k]), duration = part_finish[k] - part_start[k])
-                    k += 1
-                    p = gantt.Project(name=self.process_list[i])
-                    p.add_task(t)
-                    p.make_svg_for_tasks(filename='Gantt Chart.svg', start=start, end=start + timedelta(days=part_finish[len(part_start)-2]))
 
