@@ -37,10 +37,10 @@ class Source(object):
     def run(self):
         while True:
             # block_data로부터 part 정보 읽어주기
-            data = self.block_data.iloc[self.parts_sent]
+            part_id, data = self.block_data.index[self.parts_sent], self.block_data.iloc[self.parts_sent]
 
             # Part class로 modeling
-            part = Part(data["part"], data)
+            part = Part(part_id, data)
 
             if self.parts_sent != 0:
                 IAT = part.data[(0, 'start_time')] - self.env.now

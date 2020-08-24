@@ -3,7 +3,7 @@ import pandas as pd
 import math as m
 
 
-def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0,):
+def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
     total_time = 0.0
     utilization, idle_time, working_time = 0.0, 0.0, 0.0
     data = data[(data[type] == name) & ((data["Event"] == "work_start") | (data["Event"] == "work_finish"))]
@@ -35,7 +35,7 @@ def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0,):
                 row["Event"] = "work_start"
                 work_start = pd.DataFrame([row]).append(work_start)
             if work_start.iloc[-1]["Part"] != work_finish.iloc[-1]["Part"]:
-                row = work_start.iloc[-1]
+                row = dict(work_start.iloc[-1])
                 row["Time"] = finish_time
                 row["Event"] = "work_finish"
                 work_finish = work_finish.append(pd.DataFrame([row]))
@@ -52,10 +52,11 @@ def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0,):
 def cal_leadtime(data, start_time=0.0, finish_time=0.0):
     part_created = data[data["Event"] == "part_created"]
     completed = data[data["Event"] == "completed"]
+    part_created = part_created[:len(completed)]
 
     idx = (completed["Time"] >= start_time) & (completed["Time"] <= finish_time)
-    part_created = part_created[idx.to_list()].sort_values(["Part"])
-    completed = completed[idx.to_list()].sort_values(["Part"])
+    part_created = part_created[list(idx)].sort_values(["Part"])
+    completed = completed[list(idx)].sort_values(["Part"])
     part_created = part_created["Time"].reset_index(drop=True)
     completed = completed["Time"].reset_index(drop=True)
 
@@ -78,51 +79,37 @@ def cal_throughput(data, name, type, start_time=0.0, finish_time=0.0):
     return throughput
 
 
-class WIP(object):
-    def __init__(self, event_tracer, WIP_type=None, process=None):
-        self.data = event_tracer
-        # "WIP_m": model 전체의 WIP, "WIP_p": 특정 process의 WIP, "WIP_q": 특정 process의 WIP_q
-        self.WIP_type = WIP_type
-        self.process = process
-        self.wip_list = None
+def wip(data, WIP_type=None, type =None, name=None):
+    if WIP_type == "WIP_m":
+        wip_start = data[data["Event"] == "part_created"]
+        wip_finish = data[data["Event"] == "completed"]
+    else:  # WIP_type = "WIP_p" / "WIP_q"
+        data = data[data[type] == name]
+        wip_start = data[data["Event"] == "queue_entered"]
+        if WIP_type == "WIP_p":
+            wip_finish = data[data["Event"] == "part_transferred"]
+        else:  # WIP_type = "WIP_q":
+            wip_finish = data[data["Event"] == "queue_released"]
 
-    def wip_preprocessing(self):
-        if self.WIP_type == "WIP_m":
-            wip_start = self.data[self.data["EVENT"] == "part_created"]
-            wip_finish = self.data[self.data["EVENT"] == "completed"]
-        else:  # WIP_type = "WIP_p" / "WIP_q"
-            idx = self.data["PROCESS"].map(lambda x: self.process in x)
-            self.data = self.data.rename(index=idx)
-            self.data = self.data.loc[True, :]
-            wip_start = self.data[self.data["EVENT"] == "queue_entered"]
-            if self.WIP_type == "WIP_p":
-                wip_finish = self.data[self.data["EVENT"] == "part_transferred"]
-            else:  # WIP_type = "WIP_q":
-                wip_finish = self.data[self.data["EVENT"] == "queue_released"]
+    wip_start = wip_start.reset_index(drop=True)
+    wip_finish = wip_finish.reset_index(drop=True)
 
-        wip_start = wip_start.reset_index(drop=True)
-        wip_finish = wip_finish.reset_index(drop=True)
+    time_lange = wip_finish["Time"][len(wip_finish) - 1]
+    wip_list = [0 for _ in range(m.ceil(time_lange) + 1)]
 
-        time_lange = wip_finish["TIME"][len(wip_finish) - 1]
-        wip_list = [0 for _ in range(m.ceil(time_lange) + 1)]
+    wip_start.sort_index(inplace=True)
+    wip_finish.sort_index(inplace=True)
 
-        wip_start.sort_values(by=["PART"], inplace=True)
-        wip_finish.sort_values(by=["PART"], inplace=True)
+    data_len = min(len(wip_start), len(wip_finish))
+    wip_start = wip_start[:data_len]
+    wip_finish = wip_finish[:data_len]
 
-        data_len = min(len(wip_start), len(wip_finish))
-        wip_start = wip_start[:data_len]
-        wip_finish = wip_finish[:data_len]
+    wip_start = wip_start["Time"]
+    wip_finish = wip_finish["Time"]
 
-        return wip_list, wip_start, wip_finish
+    for i in range(len(wip_start)):
+        for j in range(m.ceil(wip_start[i]), m.ceil(wip_finish[i])):
+            wip_list[j] += 1
 
-    def cal_wip(self):
-        self.wip_list, wip_start, wip_finish = self.wip_preprocessing()
-        wip_start = wip_start["TIME"]
-        wip_finish = wip_finish["TIME"]
-
-        for i in range(len(wip_start)):
-            for j in range(m.ceil(wip_start[i]), m.ceil(wip_finish[i])):
-                self.wip_list[j] += 1
-
-        return self.wip_list
+    return wip_list
 

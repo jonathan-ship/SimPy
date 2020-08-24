@@ -18,12 +18,11 @@ process_list = ["plate_weld", "saw_front", "saw_back", "longi_attach", "longi_we
 
 # DATA PRE-PROCESSING
 # part 정보
-df_part = pd.DataFrame(data["product"])
-df_part = df_part.rename(columns={"product": "part"})
+part = list(data_all["product"])
 
 # 작업 정보, 7 = 공정 수 + Sink
 columns = pd.MultiIndex.from_product([[i for i in range(len(process_list)+1)], ['start_time', 'process_time', 'process']])
-df = pd.DataFrame([], columns=columns)
+df = pd.DataFrame([], columns=columns, index=part)
 
 # IAT = st.expon.rvs(loc=3, scale=1, size=len(data))
 # start_time = IAT.cumsum()
@@ -35,10 +34,9 @@ for i in range(len(process_list) + 1):
         df[(i, 'process')] = 'Sink'
     else:  # 공정
         df[(i, 'start_time')] = 0
-        df[(i, 'process_time')] = data[process_list[i]]
+        df[(i, 'process_time')] = list(data[process_list[i]])
         df[(i, 'process')] = process_list[i]
 
-df = pd.concat([df_part, df], axis=1)
 
 # Modeling
 env = simpy.Environment()
@@ -47,7 +45,7 @@ env = simpy.Environment()
 model = {}
 server_num = [1 for _ in range(len(process_list))]
 filename = './result/event_log_PBS.csv'
-Monitor = Monitor(filename, len(df))
+Monitor = Monitor(filename)
 
 # Modeling
 # Source
@@ -75,10 +73,8 @@ print("total time : ", finish - start_run)
 print("simulation execution time :", finish - start)
 
 print('#' * 80)
-from PostProcessing_rev import Utilization, WIP
+from PostProcessing_rev import *
 event_tracer = pd.read_csv(filename)
-for process in process_list:
-    util = Utilization(event_tracer, model, process, model['Sink'].last_arrival)
-    u, _, _ = util.utilization()
-    print("utilization of {0}: ".format(process), u)
 
+lead_time = cal_leadtime(event_tracer, finish_time=model['Sink'].last_arrival)
+print(lead_time)
