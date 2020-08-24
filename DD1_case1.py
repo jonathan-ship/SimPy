@@ -89,5 +89,3 @@ print("average lead time: ", cal_leadtime(event_tracer, finish_time=run_time))
 
 # WIP
 print("WIP of entire model: ", np.mean(wip(event_tracer, "WIP_m")))
-
-

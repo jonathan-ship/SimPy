@@ -3,7 +3,6 @@ M/M/1 Case 1
 Run time: 1000s
 Source IAT = uniform(30, 60)
 Server service time: exponential distribution - 30, 50, 70
-??: Sink delay time
 '''
 import simpy
 import pandas as pd
@@ -20,14 +19,14 @@ start_run = time.time()
 
 server_num = 3
 blocks = 1000
+run_time = 20000
 
-# df_part: part_id
-df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
+part = [i for i in range(blocks)]
 
 # data DataFrame modeling [0, 1] X ["start_time", "process_time", "process"]]
 process_list = ["Process1"]
 columns = pd.MultiIndex.from_product([[i for i in range(len(process_list)+1)], ["start_time", "process_time", "process"]])
-data = pd.DataFrame([], columns=columns)
+data = pd.DataFrame([], columns=columns, index=part)
 
 # IAT
 IAT = st.uniform.rvs(30, 30, size=blocks)
@@ -43,8 +42,6 @@ data[(1, 'start_time')] = None
 data[(1, 'process_time')] = None
 data[(1, 'process')] = 'Sink'
 
-data = pd.concat([df_part, data], axis=1)
-
 # process_time
 service_time_1 = functools.partial(np.random.exponential, 50)
 service_time_2 = functools.partial(np.random.exponential, 30)
@@ -57,7 +54,7 @@ process_time = {"Process1": [service_time_1, service_time_2, service_time_3]}  #
 
 # Monitoring
 filename = './result/event_log_MM3.csv'
-Monitor = Monitor(filename, blocks)
+Monitor = Monitor(filename)
 
 Source = Source(env, 'Source', data, model, Monitor)
 
@@ -69,7 +66,7 @@ for i in range(len(process_list) + 1):
                                                     process_time=process_time, routing_logic="most_unutilized")
 
 start_sim = time.time()
-env.run(until=20000)
+env.run(until=run_time)
 finish_sim = time.time()
 
 print('#' * 80)
@@ -82,33 +79,30 @@ print("total time : ", finish_sim - start_run)
 print("simulation execution time :", finish_sim - start_sim)  # 시뮬레이션 종료 시각
 
 # Post-Processing
-from PostProcessing_rev import Utilization, LeadTime, WIP
+from PostProcessing_rev import *
 print('#' * 80)
 print("Post-Processing")
 print("M/M/3 Case 1")
 print("IAT: uniform(30, 60), Service Time: exponential(30), exponential(50), exponential(70)")
 
 event_tracer = pd.read_csv(filename)
+
 # 가동률
 print('#' * 80)
 # Process
-utilization_process = Utilization(event_tracer, model, "Process1", model['Sink'].last_arrival)
-u, idle, working_time = utilization_process.utilization()
+u, idle, working_time = cal_utilization(event_tracer, "Process1", "Process", finish_time=run_time)
 print("idle time of Process1: ", idle)
 print("total working time of Process1: ", working_time)
 print("utilization of Process1: ", u)
 
 # Server
 for i in range(server_num):
-    utilization_server = Utilization(event_tracer, model, model["Process1"].server[i].name, model['Sink'].last_arrival)
-    u, _, _ = utilization_server.utilization()
+    u, _, _ = cal_utilization(event_tracer, 'Process1_{0}'.format(i), type="SubProcess", finish_time=run_time)
     print("utilization of Server {0}: ".format(i), u)
 
 # Lead Time
-lead_time = LeadTime(event_tracer)
-print("average lead time: ", lead_time.avg_LT())
+print("average lead time: ", cal_leadtime(event_tracer, finish_time=run_time))
 
 # WIP
-wip_m = WIP(event_tracer, WIP_type="WIP_m")
-print("WIP of entire model: ", np.mean(wip_m.cal_wip()))
+print("WIP of entire model: ", np.mean(wip(event_tracer, WIP_type="WIP_m")))
 

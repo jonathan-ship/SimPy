@@ -16,14 +16,14 @@ start_run = time.time()
 
 server_num = 3
 blocks = 1000
+run_time = 1000
 
-# df_part: part_id
-df_part = pd.DataFrame([i for i in range(blocks)], columns=["part"])
+part = [i for i in range(blocks)]
 
 # data DataFrame modeling
 process_list = ["Process1"]
 columns = pd.MultiIndex.from_product([[i for i in range(len(process_list)+1)], ["start_time", "process_time", "process"]])
-data = pd.DataFrame([], columns=columns)
+data = pd.DataFrame([], columns=columns, index=part)
 
 # Process1
 data[(0, 'start_time')] = [10*i for i in range(blocks)]
@@ -35,18 +35,17 @@ data[(1, 'start_time')] = None
 data[(1, 'process_time')] = None
 data[(1, 'process')] = 'Sink'
 
-data = pd.concat([df_part, data], axis=1)
-
 # Simulation Modeling
 env = simpy.Environment()
 model = {}
 process_time = {"Process1": [5.0, 10.0, 15.0]}
 
 # Monitoring
-filename = './result/event_log_DD3_2.csv'
-Monitor = Monitor(filename, blocks)
+filename = './result/event_log_DD3_1.csv'
+Monitor = Monitor(filename)
 
 Source = Source(env, 'Source', data, model, Monitor)
+
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):
@@ -56,7 +55,7 @@ for i in range(len(process_list) + 1):
                                                     process_time=process_time, routing_logic="most_unutilized")
 
 start_sim = time.time()
-env.run(until=1000)
+env.run(until=run_time)
 finish_sim = time.time()
 
 print('#' * 80)
@@ -69,32 +68,28 @@ print("total time : ", finish_sim - start_run)
 print("simulation execution time :", finish_sim - start_sim)  # 시뮬레이션 종료 시각
 
 # Post-Processing
-from PostProcessing_rev import Utilization, LeadTime, WIP
+from PostProcessing_rev import *
 event_tracer = pd.read_csv(filename)
-utilization_process = Utilization(event_tracer, model, "Process1", model['Sink'].last_arrival)
 print('#' * 80)
 print("Post-Processing")
-print("D/D/3 Case 2")
-print("IAT: 10s, Service Time: 5s, 10s, 15s")
+print("D/D/3 Case 1")
+print("IAT: 10s, Service Time: 10s, 10s, 10s")
 
 # 가동률
 print('#' * 80)
 # Process
-u, idle, working_time = utilization_process.utilization()
+u, idle, working_time = cal_utilization(event_tracer, "Process1", "Process", finish_time=run_time)
 print("idle time of Process1: ", idle)
 print("total working time of Process1: ", working_time)
 print("utilization of Process1: ", u)
 
 # Server
 for i in range(server_num):
-    utilization_server = Utilization(event_tracer, model, model["Process1"].server[i].name, model['Sink'].last_arrival)
-    u, _, _ = utilization_server.utilization()
+    u, _, _ = cal_utilization(event_tracer, 'Process1_{0}'.format(i), type="SubProcess", finish_time=run_time)
     print("utilization of Server {0}: ".format(i), u)
 
 # Lead Time
-lead_time = LeadTime(event_tracer)
-print("average lead time: ", lead_time.avg_LT())
+print("average lead time: ", cal_leadtime(event_tracer, finish_time=run_time))
 
 # WIP
-wip_m = WIP(event_tracer, WIP_type="WIP_m")
-print("WIP of entire model: ", np.mean(wip_m.cal_wip()))
+print("WIP of entire model: ", np.mean(wip(event_tracer, WIP_type="WIP_m")))
