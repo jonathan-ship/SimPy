@@ -18,8 +18,13 @@ process_list = ["plate_weld", "saw_front", "saw_back", "longi_attach", "longi_we
 
 # DATA PRE-PROCESSING
 # part 정보
-part = list(data_all["product"])
 
+data["total processing time"] = data["plate_weld"] + data["saw_front"] + data["saw_back"] + data["longi_attach"] + data["longi_weld"] + data["sub_assy"]
+
+#data = data.sort_values(by='total processing time', ascending=True)
+total_processing_time = list(data["total processing time"])
+
+part = list(data["product"])
 # 작업 정보, 7 = 공정 수 + Sink
 columns = pd.MultiIndex.from_product([[i for i in range(len(process_list)+1)], ['start_time', 'process_time', 'process']])
 df = pd.DataFrame([], columns=columns, index=part)
@@ -76,5 +81,7 @@ print('#' * 80)
 from PostProcessing_rev import *
 event_tracer = pd.read_csv(filename)
 
-lead_time = cal_leadtime(event_tracer, finish_time=model['Sink'].last_arrival)
-print(lead_time)
+print("Lead time : ", model['Sink'].last_arrival)
+
+print("Average Lead time of each part : ", cal_leadtime(event_tracer, finish_time=model['Sink'].last_arrival + 1))
+print("Average total processing time : ", np.mean(total_processing_time))
