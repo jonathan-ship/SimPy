@@ -10,18 +10,18 @@ from SimComponents_rev import Source, Sink, Process, Monitor
 start_run = time.time()
 
 # csv 파일 pandas 객체 생성 // 000, 003, fin 중 선택 가능
-data_all = pd.read_csv('./data/PBS_assy_sequence_gen_fin.csv')
+data_all = pd.read_csv('./data/PBS_assy_sequence_gen_000.csv')
 data = data_all[["product", "plate_weld", "saw_front", "turn_over", "saw_back", "longi_attach", "longi_weld", "sub_assy"]]
 
 # process list
-process_list = ["plate_weld", "saw_front", "saw_back", "longi_attach", "longi_weld", "sub_assy"]
+process_list = ["plate_weld", "saw_front", "turn_over", "saw_back", "longi_attach", "longi_weld", "sub_assy"]
 
 # DATA PRE-PROCESSING
 # part 정보
 
-data["total processing time"] = data["plate_weld"] + data["saw_front"] + data["saw_back"] + data["longi_attach"] + data["longi_weld"] + data["sub_assy"]
+data["total processing time"] = data["plate_weld"] + data["saw_front"] + data["turn_over"] + data["saw_back"] + data["longi_attach"] + data["longi_weld"] + data["sub_assy"]
 
-#data = data.sort_values(by='total processing time', ascending=True)
+data = data.sort_values(by='total processing time', ascending=False)
 total_processing_time = list(data["total processing time"])
 
 part = list(data["product"])
@@ -78,6 +78,7 @@ print("total time : ", finish - start_run)
 print("simulation execution time :", finish - start)
 
 print('#' * 80)
+
 from PostProcessing_rev import *
 event_tracer = pd.read_csv(filename)
 
@@ -85,3 +86,24 @@ print("Lead time : ", model['Sink'].last_arrival)
 
 print("Average Lead time of each part : ", cal_leadtime(event_tracer, finish_time=model['Sink'].last_arrival + 1))
 print("Average total processing time : ", np.mean(total_processing_time))
+
+idle_time_list = []
+
+for process in process_list:
+    _, idle_time, _ = cal_utilization(event_tracer, process, "Process", finish_time=model['Sink'].last_arrival+0.01)
+    idle_time_list.append(idle_time)
+
+print("Total Idle time: ", np.sum(idle_time_list))
+print("Average of Idle time of each Process : ", np.mean(idle_time_list))
+
+###
+delay_start = event_tracer["Time"][(event_tracer["Process"] == 'plate_weld') & (event_tracer["Event"] == "delay_start")]
+delay_finish = event_tracer["Time"][(event_tracer["Process"] == 'plate_weld') & (event_tracer["Event"] == "delay_finish")]
+
+delay_start.reset_index(drop=True, inplace=True)
+delay_finish.reset_index(drop=True, inplace=True)
+
+df_delay_time = delay_finish - delay_start
+delay_time = np.sum(df_delay_time)
+
+print("delay_time : ", delay_time)
