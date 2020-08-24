@@ -10,7 +10,7 @@ from SimComponents_rev import Source, Sink, Process, Monitor
 start_run = time.time()
 
 # csv 파일 pandas 객체 생성 // 000, 003, fin 중 선택 가능
-data_all = pd.read_csv('./data/PBS_assy_sequence_gen_000.csv')
+data_all = pd.read_csv('./data/PBS_assy_sequence_gen_fin.csv')
 data = data_all[["product", "plate_weld", "saw_front", "turn_over", "saw_back", "longi_attach", "longi_weld", "sub_assy"]]
 
 # process list
@@ -21,7 +21,7 @@ process_list = ["plate_weld", "saw_front", "turn_over", "saw_back", "longi_attac
 
 data["total processing time"] = data["plate_weld"] + data["saw_front"] + data["turn_over"] + data["saw_back"] + data["longi_attach"] + data["longi_weld"] + data["sub_assy"]
 
-data = data.sort_values(by='total processing time', ascending=False)
+data = data.sort_values(by='total processing time', ascending=True)  ## ascending: True = SPT / False = LPT
 total_processing_time = list(data["total processing time"])
 
 part = list(data["product"])
