@@ -222,7 +222,7 @@ class Routing(object):
 class Monitor(object):
     def __init__(self, filename):
         self.filename = filename
-        with open(self.filename, 'w', encoding='utf-8') as f:
+        with open(self.filename, 'w', encoding='utf-8-sig') as f:
             f.write('Time,Event,Part,Process,SubProcess')
 
     def record(self, time, process, subprocess, part_id=None, event=None):
