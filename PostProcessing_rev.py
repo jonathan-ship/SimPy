@@ -3,10 +3,10 @@ import pandas as pd
 import math as m
 
 
-def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
+def cal_utilization(event_tracer, name, type, start_time=0.0, finish_time=0.0):
     total_time = 0.0
     utilization, idle_time, working_time = 0.0, 0.0, 0.0
-    data = data[(data[type] == name) & ((data["Event"] == "work_start") | (data["Event"] == "work_finish"))]
+    data = event_tracer[(event_tracer[type] == name) & ((event_tracer["Event"] == "work_start") | (event_tracer["Event"] == "work_finish"))]
     data = data[(data["Time"] >= start_time) & (data["Time"] <= finish_time)]
 
     if len(data) == 0:
@@ -16,21 +16,21 @@ def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
     for i, group in data_by_group:
         work_start = group[group['Event'] == "work_start"]
         work_finish = group[group['Event'] == "work_finish"]
-        if len(work_start) == 0 and len(work_finish) == 0:
-            pass
-        elif len(work_start) != 0 and len(work_finish) == 0:
-            row = work_start.iloc[0]
+        # if len(work_start) == 0 and len(work_finish) == 0:
+        #     pass
+        if len(work_start) != 0 and len(work_finish) == 0:
+            row = dict(work_start.iloc[0])
             row["Time"] = finish_time
             row["Event"] = "work_finish"
             work_finish = pd.DataFrame([row])
         elif len(work_start) == 0 and len(work_finish) != 0:
-            row = work_finish.iloc[0]
+            row = dict(work_finish.iloc[0])
             row["Time"] = start_time
             row["Event"] = "work_start"
             work_start = pd.DataFrame([row])
         else:
             if work_start.iloc[0]["Part"] != work_finish.iloc[0]["Part"]:
-                row = work_finish.iloc[0]
+                row = dict(work_finish.iloc[0])
                 row["Time"] = start_time
                 row["Event"] = "work_start"
                 work_start = pd.DataFrame([row]).append(work_start)
@@ -43,8 +43,9 @@ def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
         work_finish = work_finish["Time"].reset_index(drop=True)
         working_time += np.sum(work_finish - work_start)
         total_time += (finish_time - start_time)
+
     idle_time = total_time - working_time
-    utilization = working_time / total_time
+    utilization = working_time / total_time if total_time != 0 else 0
 
     return utilization, idle_time, working_time
 
