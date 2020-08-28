@@ -73,8 +73,8 @@ class Source(object):
                 break
 
 
-class Process_no_subprocess(object):
-    def __init__(self, env, name, server_num, process_dict, monitor, qlimit=None):
+class Process_without_subprocess(object):
+    def __init__(self, env, name, server_num, process_dict, monitor, qlimit=float('inf')):
         self.env = env
         self.name = name
         self.server_num = server_num
@@ -89,6 +89,7 @@ class Process_no_subprocess(object):
         self.parts_rec = 0
         self.parts_sent = 0
         self.flag = False
+        self.len_of_server = []
 
     def run(self, part, server_id):
         # record: work_start
@@ -149,6 +150,7 @@ class Process_no_subprocess(object):
             self.queue.append(part)
             # record: queue_entered
             self.Monitor.record(self.env.now, self.name, None, part_id=part.id,  event="queue_entered")
+        self.len_of_server.append(self.server_num - self.server.count(None))
 
     def get_num_of_part(self):
         queue = len(self.queue)
@@ -288,7 +290,7 @@ class SubProcess(object):
                     self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="delay_finish")
 
                 self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="part_transferred")
-                self.process_dict[next_process].put(self.part, self.process_name, self.name)
+                self.process_dict[next_process].put(self.part)
 
             else:
                 self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id,

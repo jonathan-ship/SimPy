@@ -2,8 +2,9 @@ import simpy
 import time
 import os
 import pandas as pd
+import numpy as np
 
-from SimComponents_rev import Source, Sink, Process, Monitor
+from SimComponents_rev import Source, Sink, Process_without_subprocess, Monitor
 
 # 코드 실행 시작 시각
 start_0 = time.time()
@@ -75,7 +76,7 @@ for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, routing_logic="first_possible")
+        model[process_list[i]] = Process_without_subprocess(env, process_list[i], server_num[i], model, Monitor)
 
 print("Data pre-processing is done")
 df.to_excel('./block_transfer_전처리.xlsx')
@@ -83,6 +84,9 @@ df.to_excel('./block_transfer_전처리.xlsx')
 start = time.time()  # 시뮬레이션 시작 시각
 env.run()
 finish = time.time()  # 시뮬레이션 종료 시각
+
+for process in process_list:
+    print("server: ", np.max(model[process].len_of_server))
 
 print('#' * 80)
 print("Results of Block Transfer(actual) simulation")
@@ -110,5 +114,7 @@ for i in range(len(process_list)):
     print("idle time of {0} : ".format(process), idle)
     print("total working time of {0} : ".format(process), working_time)
     print("#"*80)
+
+print("total lead time: ", model['Sink'].last_arrival)
 
 

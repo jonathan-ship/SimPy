@@ -5,7 +5,7 @@ import simpy
 import time
 import random
 
-from SimComponents_rev import Source, Sink, Process_no_subprocess, Monitor
+from SimComponents_rev import Source, Sink, Process_without_subprocess, Monitor
 
 # 코드 실행 시각
 start_run = time.time()
@@ -104,7 +104,7 @@ for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model[process_list[i]] = Process_no_subprocess(env, process_list[i], server_num[i], model, Monitor, qlimit=1)
+        model[process_list[i]] = Process_without_subprocess(env, process_list[i], server_num[i], model, Monitor, qlimit=1)
 
 # Run it
 df.to_excel('./master_plan_전처리.xlsx')
