@@ -18,8 +18,8 @@ from SimComponents_rev import Source, Sink, Process, Monitor
 start_run = time.time()
 
 server_num = 3
-blocks = 1000
-run_time = 20000
+blocks = 10000
+# run_time = 20000
 
 part = [i for i in range(blocks)]
 
@@ -63,10 +63,10 @@ for i in range(len(process_list) + 1):
         model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
         model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
-                                                    process_time=process_time, routing_logic="most_unutilized")
+                                                    process_time=process_time)
 
 start_sim = time.time()
-env.run(until=run_time)
+env.run()
 finish_sim = time.time()
 
 print('#' * 80)
@@ -86,7 +86,7 @@ print("M/M/3 Case 1")
 print("IAT: uniform(30, 60), Service Time: exponential(30), exponential(50), exponential(70)")
 
 event_tracer = pd.read_csv(filename)
-
+run_time = model['Sink'].last_arrival
 # 가동률
 print('#' * 80)
 # Process

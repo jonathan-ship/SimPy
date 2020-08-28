@@ -20,11 +20,11 @@ data['process2'] = data['process2'] + '_2'
 
 # DATA PRE-PROCESSING
 # part 정보
-df_part = pd.DataFrame(data["part"])
+part = list(data["part"])
 
 # 작업 정보
 columns = pd.MultiIndex.from_product([[0, 1, 2], ['start_time', 'process_time', 'process']])
-df = pd.DataFrame([], columns=columns)
+df = pd.DataFrame([], columns=columns, index=part)
 
 # start_time
 # IAT
@@ -36,17 +36,14 @@ df[(1, 'start_time')] = 0
 df[(2, 'start_time')] = None
 
 # process_time - Plan, Actual, Predicted 중 선택
-df[(0, 'process_time')] = data['Actual_makingLT']
-df[(1, 'process_time')] = data['Actual_paintingLT']
+df[(0, 'process_time')] = list(data['Actual_makingLT'])
+df[(1, 'process_time')] = list(data['Actual_paintingLT'])
 df[(2, 'process_time')] = None
 
 # process
-df[(0, 'process')] = data['process1']
-df[(1, 'process')] = data['process2']
+df[(0, 'process')] = list(data['process1'])
+df[(1, 'process')] = list(data['process2'])
 df[(2, 'process')] = 'Sink'
-
-# part 정보와 process 정보의 dataframe 통합(열 기준)
-df = pd.concat([df_part, df], axis=1)
 
 # Modeling
 env = simpy.Environment()
@@ -59,7 +56,7 @@ model = {}
 server_num = [1 for _ in range(len(process_list))]
 
 filename = './result/event_log_supply_chain.csv'
-Monitor = Monitor(filename, len(df))
+Monitor = Monitor(filename)
 
 Source = Source(env, 'Source', df, model, Monitor)
 

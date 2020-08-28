@@ -15,8 +15,7 @@ from SimComponents_rev import Source, Sink, Process, Monitor
 start_run = time.time()
 
 server_num = 3
-blocks = 1000
-run_time = 1000
+blocks = 10000
 
 part = [i for i in range(blocks)]
 
@@ -52,10 +51,10 @@ for i in range(len(process_list) + 1):
         model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
         model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
-                                                    process_time=process_time, routing_logic="most_unutilized")
+                                                    process_time=process_time, routing_logic="least_utilized")
 
 start_sim = time.time()
-env.run(until=run_time)
+env.run()
 finish_sim = time.time()
 
 print('#' * 80)
@@ -78,6 +77,7 @@ print("IAT: 10s, Service Time: 10s, 10s, 10s")
 # 가동률
 print('#' * 80)
 # Process
+run_time = model['Sink'].last_arrival
 u, idle, working_time = cal_utilization(event_tracer, "Process1", "Process", finish_time=run_time)
 print("idle time of Process1: ", idle)
 print("total working time of Process1: ", working_time)

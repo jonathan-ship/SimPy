@@ -18,7 +18,7 @@ server_num = 3
 blocks = 1000
 run_time = 1000
 
-part = [i for i in range(blocks)]
+part = [i for i in range(blocks)]  # part 이름
 
 # data DataFrame modeling
 process_list = ["Process1"]
@@ -46,13 +46,12 @@ Monitor = Monitor(filename)
 
 Source = Source(env, 'Source', data, model, Monitor)
 
-
 for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
         model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
-                                                    process_time=process_time, routing_logic="most_unutilized")
+                                                    process_time=process_time, routing_logic="least_utilized")
 
 start_sim = time.time()
 env.run(until=run_time)

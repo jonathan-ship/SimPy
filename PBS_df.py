@@ -21,7 +21,7 @@ process_list = ["plate_weld", "saw_front", "turn_over", "saw_back", "longi_attac
 
 data["total processing time"] = data["plate_weld"] + data["saw_front"] + data["turn_over"] + data["saw_back"] + data["longi_attach"] + data["longi_weld"] + data["sub_assy"]
 
-data = data.sort_values(by='total processing time', ascending=True)  ## ascending: True = SPT / False = LPT
+data = data.sort_values(by='total processing time', ascending=False)  ## ascending: True = SPT / False = LPT
 total_processing_time = list(data["total processing time"])
 
 part = list(data["product"])
@@ -29,8 +29,8 @@ part = list(data["product"])
 columns = pd.MultiIndex.from_product([[i for i in range(len(process_list)+1)], ['start_time', 'process_time', 'process']])
 df = pd.DataFrame([], columns=columns, index=part)
 
-# IAT = st.expon.rvs(loc=3, scale=1, size=len(data))
-# start_time = IAT.cumsum()
+IAT = st.expon.rvs(loc=3, scale=1, size=len(data))
+start_time = IAT.cumsum()
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):  # Sink
@@ -49,7 +49,7 @@ env = simpy.Environment()
 ##
 model = {}
 server_num = [1 for _ in range(len(process_list))]
-filename = './result/event_log_PBS.csv'
+filename = './result/event_log_PBS_SPT.csv'
 Monitor = Monitor(filename)
 
 # Modeling
@@ -103,7 +103,7 @@ delay_finish = event_tracer["Time"][(event_tracer["Process"] == 'plate_weld') & 
 delay_start.reset_index(drop=True, inplace=True)
 delay_finish.reset_index(drop=True, inplace=True)
 
-df_delay_time = delay_finish - delay_start
-delay_time = np.sum(df_delay_time)
 
-print("delay_time : ", delay_time)
+delay_time = np.sum(delay_finish) - np.sum(delay_start)
+
+print("delay_time of first Process: ", delay_time)
