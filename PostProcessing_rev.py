@@ -17,7 +17,7 @@ def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
         work_start = group[group['Event'] == "work_start"]
         work_finish = group[group['Event'] == "work_finish"]
         if len(work_start) == 0 and len(work_finish) == 0:
-            return utilization, idle_time, working_time
+            pass
         elif len(work_start) != 0 and len(work_finish) == 0:
             row = dict(work_start.iloc[0])
             row["Time"] = finish_time
@@ -41,11 +41,10 @@ def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
                 work_finish = work_finish.append(pd.DataFrame([row]))
         work_start = work_start["Time"].reset_index(drop=True)
         work_finish = work_finish["Time"].reset_index(drop=True)
-
         working_time += np.sum(work_finish - work_start)
         total_time += (finish_time - start_time)
     idle_time = total_time - working_time
-    utilization = working_time / total_time if total_time != 0 else 0
+    utilization = working_time / total_time
 
     return utilization, idle_time, working_time
 
@@ -53,9 +52,13 @@ def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
 def cal_leadtime(data, start_time=0.0, finish_time=0.0):
     part_created = data[data["Event"] == "part_created"]
     completed = data[data["Event"] == "completed"]
-    part_created = part_created[:len(completed)]
 
     idx = (completed["Time"] >= start_time) & (completed["Time"] <= finish_time)
+
+    if len(idx[idx]) == 0:
+        return 0.0
+
+    part_created = part_created[:len(completed)]
     part_created = part_created[list(idx)].sort_values(["Part"])
     completed = completed[list(idx)].sort_values(["Part"])
     part_created = part_created["Time"].reset_index(drop=True)
