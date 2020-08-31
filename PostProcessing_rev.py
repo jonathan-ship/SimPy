@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, 'c:\pyzo2015a\lib\site-packages\plotly')
 import plotly.figure_factory as ff
 
+
 def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
     total_time = 0.0
     utilization, idle_time, working_time = 0.0, 0.0, 0.0
@@ -26,7 +27,7 @@ def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
         work_start = group[group['Event'] == "work_start"]
         work_finish = group[group['Event'] == "work_finish"]
         if len(work_start) == 0 and len(work_finish) == 0:
-            pass
+            return utilization, idle_time, working_time
         elif len(work_start) != 0 and len(work_finish) == 0:
             row = dict(work_start.iloc[0])
             row["Time"] = finish_time
@@ -50,10 +51,11 @@ def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
                 work_finish = work_finish.append(pd.DataFrame([row]))
         work_start = work_start["Time"].reset_index(drop=True)
         work_finish = work_finish["Time"].reset_index(drop=True)
+
         working_time += np.sum(work_finish - work_start)
         total_time += (finish_time - start_time)
     idle_time = total_time - working_time
-    utilization = working_time / total_time
+    utilization = working_time / total_time if total_time != 0 else 0
 
     return utilization, idle_time, working_time
 
@@ -61,13 +63,9 @@ def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
 def cal_leadtime(data, start_time=0.0, finish_time=0.0):
     part_created = data[data["Event"] == "part_created"]
     completed = data[data["Event"] == "completed"]
+    part_created = part_created[:len(completed)]
 
     idx = (completed["Time"] >= start_time) & (completed["Time"] <= finish_time)
-
-    if len(idx[idx]) == 0:
-        return 0.0
-
-    part_created = part_created[:len(completed)]
     part_created = part_created[list(idx)].sort_values(["Part"])
     completed = completed[list(idx)].sort_values(["Part"])
     part_created = part_created["Time"].reset_index(drop=True)
@@ -126,30 +124,22 @@ def wip(data, WIP_type=None, type =None, name=None):
 
     return wip_list
 
-class Gantt(object):
-    def __init__(self, data, process_list):
-        self.data = data
-        self.process_list = process_list
-        self.dataframe = []
+def gantt(data, process_list):
+    list_part = list(data["Part"][data["Event"] == "part_created"])
+    start = datetime.date(2020,8,31)
+    r = lambda: random.randint(0, 255)
+    dataframe = []
+    # print('#%02X%02X%02X' % (r(),r(),r()))
+    colors = ['#%02X%02X%02X' % (r(), r(), r())]
 
-    def gantt(self):
-        self.list_part = list(self.data["PART"][self.data["EVENT"] == "part_created"])
+    for part in list_part:
+        part_data = data[data["Part"] == part]
+        part_start = list((part_data["Time"][(part_data["Event"] == "work_start") | (part_data["Event"] == "part_created")]).reset_index(drop=True))
+        part_finish = list((part_data["Time"][(part_data["Event"] == "work_finish") | (part_data["Event"] == "part_transferred") & (part_data["Process"] == "Source")]).reset_index(drop=True))
 
-        start = datetime.date(2020,8,13)
-        r = lambda: random.randint(0, 255)
+        for i in range(len(process_list)-1):
+            dataframe.append(dict(Task=process_list[i], Start=(start + datetime.timedelta(days=part_start[i+1])).isoformat(), Finish=(start + datetime.timedelta(days=part_finish[i+1])).isoformat(),Resource=part))
+            colors.append('#%02X%02X%02X' % (r(), r(), r()))
 
-        # print('#%02X%02X%02X' % (r(),r(),r()))
-        colors = ['#%02X%02X%02X' % (r(), r(), r())]
-
-        for part in self.list_part:
-            part_data = self.data[self.data["PART"] == part]
-            part_start = list((part_data["TIME"][(part_data["EVENT"] == "work_start") | (part_data["EVENT"] == "part_created")]).reset_index(drop=True))
-            part_finish = list((part_data["TIME"][(part_data["EVENT"] == "work_finish") | (part_data["EVENT"] == "part_transferred") & (part_data["PROCESS"] == "Source")]).reset_index(drop=True))
-
-            for i in range(len(self.process_list)):
-                self.dataframe.append(dict(Task=self.process_list[i], Start=(start + datetime.timedelta(days=part_start[i+1])).isoformat(), Finish=(start + datetime.timedelta(days=part_finish[i+1])).isoformat(),Resource=part))
-                colors.append('#%02X%02X%02X' % (r(), r(), r()))
-
-        fig = ff.create_gantt(self.dataframe, colors=colors, index_col='Resource', group_tasks=True)
-        fig.show()
-
+    fig = ff.create_gantt(dataframe, colors=colors, index_col='Resource', group_tasks=True)
+    fig.show()
