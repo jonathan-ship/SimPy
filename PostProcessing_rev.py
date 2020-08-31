@@ -137,7 +137,7 @@ def gantt(data, process_list):
         part_start = list((part_data["Time"][(part_data["Event"] == "work_start") | (part_data["Event"] == "part_created")]).reset_index(drop=True))
         part_finish = list((part_data["Time"][(part_data["Event"] == "work_finish") | (part_data["Event"] == "part_transferred") & (part_data["Process"] == "Source")]).reset_index(drop=True))
 
-        for i in range(len(process_list)-1):
+        for i in range(len(process_list)):
             dataframe.append(dict(Task=process_list[i], Start=(start + datetime.timedelta(days=part_start[i+1])).isoformat(), Finish=(start + datetime.timedelta(days=part_finish[i+1])).isoformat(),Resource=part))
             colors.append('#%02X%02X%02X' % (r(), r(), r()))
 
