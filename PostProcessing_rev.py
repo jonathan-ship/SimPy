@@ -1,7 +1,16 @@
 import numpy as np
 import pandas as pd
 import math as m
+import gantt
+import time
+from datetime import timedelta
+import datetime
+import random
+from matplotlib import pyplot as plt
 
+import sys
+sys.path.insert(0, 'c:\pyzo2015a\lib\site-packages\plotly')
+import plotly.figure_factory as ff
 
 def cal_utilization(data, name, type, start_time=0.0, finish_time=0.0):
     total_time = 0.0
@@ -116,4 +125,31 @@ def wip(data, WIP_type=None, type =None, name=None):
             wip_list[j] += 1
 
     return wip_list
+
+class Gantt(object):
+    def __init__(self, data, process_list):
+        self.data = data
+        self.process_list = process_list
+        self.dataframe = []
+
+    def gantt(self):
+        self.list_part = list(self.data["PART"][self.data["EVENT"] == "part_created"])
+
+        start = datetime.date(2020,8,13)
+        r = lambda: random.randint(0, 255)
+
+        # print('#%02X%02X%02X' % (r(),r(),r()))
+        colors = ['#%02X%02X%02X' % (r(), r(), r())]
+
+        for part in self.list_part:
+            part_data = self.data[self.data["PART"] == part]
+            part_start = list((part_data["TIME"][(part_data["EVENT"] == "work_start") | (part_data["EVENT"] == "part_created")]).reset_index(drop=True))
+            part_finish = list((part_data["TIME"][(part_data["EVENT"] == "work_finish") | (part_data["EVENT"] == "part_transferred") & (part_data["PROCESS"] == "Source")]).reset_index(drop=True))
+
+            for i in range(len(self.process_list)):
+                self.dataframe.append(dict(Task=self.process_list[i], Start=(start + datetime.timedelta(days=part_start[i+1])).isoformat(), Finish=(start + datetime.timedelta(days=part_finish[i+1])).isoformat(),Resource=part))
+                colors.append('#%02X%02X%02X' % (r(), r(), r()))
+
+        fig = ff.create_gantt(self.dataframe, colors=colors, index_col='Resource', group_tasks=True)
+        fig.show()
 
