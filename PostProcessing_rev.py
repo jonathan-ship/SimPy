@@ -99,7 +99,7 @@ def cal_utilization_avg(log, name, type, num=1, start_time=0.0, finish_time=0.0)
         total_time += (finish_time - start_time)
 
     idle_time = total_time - working_time
-    utilization = working_time / total_time
+    utilization = working_time / total_time if total_time != 0.0 else 0.0
 
     return utilization, idle_time, working_time
 
@@ -138,15 +138,35 @@ def cal_throughput(log, name, type, start_time=0.0, finish_time=0.0):
     return throughput
 
 
-def calculate_wip(log, type, name, start_time=0.0, finish_time=0.0, time_interval=0.1, WIP_type=None):
-    work_start = log[["Part", "Time"]][(log[type] == name) & (log["Event"] == "work_start")]
-    work_finish = log[["Part", "Time"]][(log[type] == name) & (log["Event"] == "work_finish")]
-    work = pd.merge(work_start, work_finish, on="Part", suffixes=["_start", "_finish"])
+def calculate_wip(log, start_time=0.0, finish_time=0.0, time_interval=0.1, display=False, save=False):
+    if int((finish_time - start_time) / time_interval) <= 0:
+        print("time interval is too wide")
+        return pd.DataFrame()
 
-    time = np.linspace(start_time, finish_time, step=time_interval)
+    part_created = log[["Part", "Time"]][log["Event"] == "part_created"]
+    completed = log[["Part", "Time"]][log["Event"] == "completed"]
+    data = pd.merge(part_created, completed, on="Part", suffixes=["_start", "_finish"])
 
-    for i, row in work.iterrows():
+    time = np.arange(start_time, finish_time, step=time_interval)[1:]
+    wip = np.array([0.0 for _ in range(len(time))])
+
+    for i, row in data.iterrows():
         idx = np.where((time >= row["Time_start"]) and (time <= row["Time_finsih"]))
+        wip[idx] += 1
+
+    if display or save:
+        graph(time, wip, title="WIP", display=display, save=save)
+
+    result = pd.DataFrame({"Time": time, "WIP": wip})
+    return result
+
+
+def calculate_wip_avg(log, start_time=0.0, finish_time=0.0):
+    part_created = log[log["Event"] == "part_created"]
+    completed = log[log["Event"] == "completed"]
+    part_created = part_created[(part_created["Time"] >= start_time) & (part_created["Time"] <= finish_time)]
+    completed = completed[(completed["Time"] >= start_time) & (completed["Time"] <= finish_time)]
+
 
 
 def wip(data, WIP_type=None, type =None, name=None):
