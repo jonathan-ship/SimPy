@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import numpy as np
 
-from SimComponents_rev import Source, Sink, Process_without_subprocess, Monitor
+from SimComponents_rev import Source, Sink, Process, Monitor
 
 # 코드 실행 시작 시각
 start_0 = time.time()
@@ -61,11 +61,11 @@ env = simpy.Environment()
 model = {}
 
 # 작업장 수
-m_assy = 300
-m_oft = 300
-m_pnt = 300
+m_assy = 2
+m_oft = 2
+m_pnt = 2
 server_num = [m_assy, m_oft, m_pnt]
-filename = './result/event_log_block_transfer_actual.csv'
+filename = './result/event_log_block_movement_process_m_2.csv'
 Monitor = Monitor(filename)
 
 # Source
@@ -76,7 +76,7 @@ for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model[process_list[i]] = Process_without_subprocess(env, process_list[i], server_num[i], model, Monitor)
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
 print("Data pre-processing is done")
 df.to_excel('./block_transfer_전처리.xlsx')
@@ -89,7 +89,7 @@ for process in process_list:
     print("server: ", np.max(model[process].len_of_server))
 
 print('#' * 80)
-print("Results of Block Transfer(actual) simulation")
+print("Results of Block Transfer(actual) simulation / Process / m = 2")
 print('#' * 80)
 
 # 코드 실행 시간

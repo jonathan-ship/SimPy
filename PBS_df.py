@@ -21,7 +21,7 @@ process_list = ["plate_weld", "saw_front", "turn_over", "saw_back", "longi_attac
 
 data["total processing time"] = data["plate_weld"] + data["saw_front"] + data["turn_over"] + data["saw_back"] + data["longi_attach"] + data["longi_weld"] + data["sub_assy"]
 
-data = data.sort_values(by='total processing time', ascending=False)  ## ascending: True = SPT / False = LPT
+# data = data.sort_values(by='total processing time', ascending=False)  ## ascending: True = SPT / False = LPT
 total_processing_time = list(data["total processing time"])
 
 part = list(data["product"])
@@ -41,7 +41,6 @@ for i in range(len(process_list) + 1):
         df[(i, 'start_time')] = 0
         df[(i, 'process_time')] = list(data[process_list[i]])
         df[(i, 'process')] = process_list[i]
-
 
 # Modeling
 env = simpy.Environment()
@@ -90,8 +89,10 @@ print("Average total processing time : ", np.mean(total_processing_time))
 idle_time_list = []
 
 for process in process_list:
-    _, idle_time, _ = cal_utilization(event_tracer, process, "Process", finish_time=model['Sink'].last_arrival+0.01)
+    u, idle_time, _ = cal_utilization(event_tracer, process, "Process", finish_time=model['Sink'].last_arrival)
     idle_time_list.append(idle_time)
+    print("utilization of {0} : ".format(process), u)
+    print("idle time of {0} : ".format(process), idle_time)
 
 print("Total Idle time: ", np.sum(idle_time_list))
 print("Average of Idle time of each Process : ", np.mean(idle_time_list))

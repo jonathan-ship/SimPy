@@ -130,6 +130,7 @@ class Process_without_subprocess(object):
 
         if len(self.queue) > 0:
             part = self.queue.popleft()
+            self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="routing_ended")
             self.server[server_id] = self.env.process(self.run(part, server_id))
             # record: queue_released
             self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="queue_released")
@@ -143,13 +144,15 @@ class Process_without_subprocess(object):
             self.waiting.pop(delay_part).succeed()
 
     def put(self, part):
+        self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process_entered")
         self.parts_rec += 1
         if self.server.count(None) != 0:  # server에 자리가 있으면
             self.server[self.server.index(None)] = self.env.process(self.run(part, self.server.index(None)))
+            self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="routing_ended")
         else:  # server가 다 차 있으면
             self.queue.append(part)
             # record: queue_entered
-            self.Monitor.record(self.env.now, self.name, None, part_id=part.id,  event="queue_entered")
+            self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="queue_entered")
         self.len_of_server.append(self.server_num - self.server.count(None))
 
     def get_num_of_part(self):
@@ -163,7 +166,7 @@ class Process(object):
     def __init__(self, env, name, server_num, process_dict, monitor, process_time=None, qlimit=float('inf'), routing_logic="cyclic"):
         self.env = env
         self.name = name
-        self.server_process_time = process_time[self.name] if process_time is not None else [None for _ in range(server_num)]
+        self.server_process_time = process_time[self.name] if process_time is not None else [None for _ in range(server_num)]  ## [5, 10, 15]
         self.server_num = server_num
         self.Monitor = monitor
         self.process_dict = process_dict
@@ -175,8 +178,10 @@ class Process(object):
         self.server_idx = 0
         self.waiting = {}
         self.delay_part_id = []
+        self.len_of_server = []
 
     def put(self, part):
+        self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process_entered")
         # Routing
         routing = Routing(self.server)
         if self.routing_logic == "least_utilized":  # routing logic = least utilized
@@ -185,6 +190,8 @@ class Process(object):
             self.server_idx = routing.first_possible()
         else:  # routing logic = cyclic
             self.server_idx = 0 if (self.parts_sent == 0) or (self.server_idx == self.server_num-1) else self.server_idx + 1
+
+        self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="routing_ended")
 
         # lag: 현행공정 계획된 시작시간 - 현재 시각
         # if part.data[(part.step + step, 'start_time')] and process_from != 'Source':
@@ -207,6 +214,7 @@ class Process(object):
         # self.Monitor.record(self.env.now, process_from, subprocess_from, part_id=part.id, event="part_transferred")
         self.Monitor.record(self.env.now, self.name, self.server[self.server_idx].name, part_id=part.id, event="queue_entered")
         self.server[self.server_idx].sub_queue.put(part)
+        self.len_of_server.append(self.server_idx)
 
     def get_num_of_part(self):
         server_num = 0
