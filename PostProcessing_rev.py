@@ -213,11 +213,15 @@ def gantt(data, process_list):
     colors = ['#%02X%02X%02X' % (r(), r(), r())]
 
     for part in list_part:
-        part_data = data[data["Part"] == part]
-        part_start = list((part_data["Time"][(part_data["Event"] == "work_start") | (part_data["Event"] == "part_created")]).reset_index(drop=True))
-        part_finish = list((part_data["Time"][(part_data["Event"] == "work_finish") | (part_data["Event"] == "part_transferred") & (part_data["Process"] == "Source")]).reset_index(drop=True))
-
         for i in range(len(process_list)):
+            part_data = data[data["Part"] == part]
+            part_start = list((part_data["Time"][(part_data["Event"] == "work_start") | (part_data["Event"] == "part_created")]).reset_index(drop=True))
+            part_finish = list((part_data["Time"][(part_data["Event"] == "work_finish") | (part_data["Event"] == "part_transferred") & (part_data["Process"] == "Source")]).reset_index(drop=True))
+            if len(part_start) != (len(process_list) + 1):
+                if part_data["Time"][(part_data["Event"] == "work_start") & (part_data["Process"] == process_list[i])] not in part_start:
+                    part_start.insert(i+1, part_data["Time"]["Event"] == "part_transferred" & part_data["Process"] == process_list[i-1])
+                    part_finish.insert(i+1, part_data["Time"]["Event"] == "work_finish" & part_data["Process"] == process_list[i+1])
+
             dataframe.append(dict(Task=process_list[i], Start=(start + datetime.timedelta(days=part_start[i+1])).isoformat(), Finish=(start + datetime.timedelta(days=part_finish[i+1])).isoformat(),Resource=part))
             colors.append('#%02X%02X%02X' % (r(), r(), r()))
 
