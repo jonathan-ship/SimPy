@@ -20,32 +20,7 @@ def graph(x, y, title=None, display=False, save=False):
         plt.save()
 
 
-def cal_utilization(log, name, type, num=1, start_time=0.0, finish_time=0.0, time_interval=0.1, display=False, save=False):
-    if int((finish_time - start_time) / time_interval) <= 0:
-        print("time interval is too wide")
-        return pd.DataFrame()
-
-    point = np.arange(start_time, finish_time, step=time_interval)
-    time = np.array([0.0 for _ in range(len(point) - 1)])
-    utilization = np.array([0.0 for _ in range(len(point) - 1)])
-    idle_time = np.array([0.0 for _ in range(len(point) - 1)])
-    working_time = np.array([0.0 for _ in range(len(point) - 1)])
-
-    for i in range(len(point) - 1):
-        time[i] = point[i + 1]
-        utilization[i], idle_time[i], working_time[i] \
-            = cal_utilization_avg(log, name, type, num=num, start_time=point[i], finish_time=point[i + 1])
-
-    if display or save:
-        graph(time, utilization, title="Utilization", display=display, save=save)
-        graph(time, idle_time, title="Idle time", display=display, save=save)
-        graph(time, working_time, title="Working time", display=display, save=save)
-
-    result = pd.DataFrame({"Time": time, "Utilization": utilization, "Idle_time": idle_time, "Working_time": working_time})
-    return result
-
-
-def cal_utilization_avg(log, name, type, num=1, start_time=0.0, finish_time=0.0):
+def cal_utilization(log, name=None, type=None, num=1, start_time=0.0, finish_time=0.0):
     total_time = 0.0
     utilization, idle_time, working_time = 0.0, 0.0, 0.0
     data_all = log[(log[type] == name) & ((log["Event"] == "work_start") | (log["Event"] == "work_finish"))]
@@ -53,15 +28,14 @@ def cal_utilization_avg(log, name, type, num=1, start_time=0.0, finish_time=0.0)
 
     for i in range(num):
         if type == "Process":
-            group = data[data["SubProcess"] == (name + "_{0}".format(i))]
-        else:
-            group = data[data["SubProcess"] == name]
+            name = name + "_{0}".format(i)
 
+        group = data[data["SubProcess"] == name]
         work_start = group[group['Event'] == "work_start"]
         work_finish = group[group['Event'] == "work_finish"]
 
         if len(work_start) == 0 and len(work_finish) == 0:
-            temp = data_all[data_all["SubProcess"] == i]
+            temp = data_all[data_all["SubProcess"] == name]
             if len(temp) != 0:
                 idx = temp["Time"] >= start_time
                 if temp[idx].iloc[0]["Event"] == "work_finsh":
@@ -104,40 +78,133 @@ def cal_utilization_avg(log, name, type, num=1, start_time=0.0, finish_time=0.0)
     return utilization, idle_time, working_time
 
 
-def cal_leadtime(log, start_time=0.0, finish_time=0.0):
-    part_created = log[log["Event"] == "part_created"]
-    completed = log[log["Event"] == "completed"]
+def cal_leadtime(log, name=None, type=None, mode="m", start_time=0.0, finish_time=0.0):
+    event = {"m": ("part_created", "completed"),
+             "p": ("queue_entered", "part_transferred")}
 
-    idx = (completed["Time"] >= start_time) & (completed["Time"] <= finish_time)
+    if not mode == "m":
+        log = log[log[type] == name]
+
+    leadtime_start = log[log["Event"] == event[mode][0]]
+    leadtime_finish = log[log["Event"] == event[mode][1]]
+
+    idx = (leadtime_finish["Time"] >= start_time) & (leadtime_finish["Time"] <= finish_time)
 
     if len(idx[idx]) == 0:
         return 0.0
 
-    part_created = part_created[:len(completed)]
-    part_created = part_created[list(idx)].sort_values(["Part"])
-    completed = completed[list(idx)].sort_values(["Part"])
-    part_created = part_created["Time"].reset_index(drop=True)
-    completed = completed["Time"].reset_index(drop=True)
+    leadtime_start = leadtime_start[:len(leadtime_finish)]
+    leadtime_start = leadtime_start[list(idx)].sort_values(["Part"])
+    leadtime_finish = leadtime_finish[list(idx)].sort_values(["Part"])
+    leadtime_start = leadtime_start["Time"].reset_index(drop=True)
+    leadtime_finish = leadtime_finish["Time"].reset_index(drop=True)
 
-    lead_time = completed - part_created
-    lead_time = np.mean(lead_time)
+    lead_time_list = leadtime_finish - leadtime_start
+    lead_time = np.mean(lead_time_list)
 
     return lead_time
 
 
 def cal_throughput(log, name, type, start_time=0.0, finish_time=0.0):
     throughput = 0.0
+
     part_transferred = log[(log[type] == name) & (log["Event"] == "part_transferred")]
-    part_transferred = part_transferred[(part_transferred["Time"] >= start_time) & (part_transferred["Time"] <= finish_time)]
+    part_transferred = part_transferred[(part_transferred["Time"] >= start_time)
+                                        & (part_transferred["Time"] <= finish_time)]
+
     if len(part_transferred) == 0:
         return throughput
+
     throughput = len(part_transferred) / (finish_time - start_time)
-    #data = data[(data[type] == name) & ((data["Event"] == "queue_entered") | (data["Event"] == "part_transferred"))]
-    #cycle_times = data["Time"].groupby(data["Part"]).diff().dropna()
-    #throughput = 1 / np.mean(cycle_times)
+
     return throughput
 
 
+def cal_wip(log, name=None, type=None, mode="m", start_time=0.0, finish_time=0.0):
+    total_time = finish_time - start_time
+    wip, duration = 0.0, 0.0
+
+    event = {"m": ("part_created", "completed"),
+             "p": ("queue_entered", "part_transferred"),
+             "q": ("queue_entered", "queue_released")}
+
+    if not mode == "m":
+        log = log[log[type] == name]
+
+    log = log[(log["Event"] == event[mode][0]) | (log["Event"] == event[mode][1])]
+    data = log[(log["Time"] >= start_time) & (log["Time"] <= finish_time)]
+
+    data_by_group = data.groupby(data["SubProcess"])
+    for i, group in data_by_group:
+        wip_start = group[group["Event"] == event[mode][0]]
+        wip_finish = group[group["Event"] == event[mode][1]]
+        if len(wip_start) == 0 and len(wip_finish) == 0:
+            temp = log[log["SubProcess"] == i]
+            if len(temp) != 0:
+                idx = temp["Time"] >= start_time
+                if temp[idx].iloc[0]["Event"] == event[mode][1]:
+                    duration += (finish_time - start_time)
+            continue
+        elif len(wip_start) != 0 and len(wip_finish) == 0:
+            row = dict(wip_start.iloc[0])
+            row["Time"] = finish_time
+            row["Event"] = event[mode][1]
+            wip_finish = pd.DataFrame([row])
+        elif len(wip_start) == 0 and len(wip_finish) != 0:
+            row = dict(wip_finish.iloc[0])
+            row["Time"] = start_time
+            row["Event"] = event[mode][0]
+            wip_start = pd.DataFrame([row])
+        else:
+            if wip_start.iloc[0]["Part"] != wip_finish.iloc[0]["Part"]:
+                row = dict(wip_finish.iloc[0])
+                row["Time"] = start_time
+                row["Event"] = event[mode][0]
+                wip_start = pd.DataFrame([row]).append(wip_start)
+            if wip_start.iloc[-1]["Part"] != wip_finish.iloc[-1]["Part"]:
+                row = dict(wip_start.iloc[-1])
+                row["Time"] = finish_time
+                row["Event"] = event[mode][1]
+                wip_finish = wip_finish.append(pd.DataFrame([row]))
+
+        wip_start = wip_start["Time"].reset_index(drop=True)
+        wip_finish = wip_finish["Time"].reset_index(drop=True)
+        duration += np.sum(wip_finish - wip_start)
+
+        wip = duration / total_time if total_time != 0.0 else 0.0
+
+        return wip
+
+
+
+'''
+def cal_utilization(log, name, type, num=1, start_time=0.0, finish_time=0.0, time_interval=0.1, display=False, save=False):
+    if int((finish_time - start_time) / time_interval) <= 0:
+        print("time interval is too wide")
+        return pd.DataFrame()
+
+    point = np.arange(start_time, finish_time, step=time_interval)
+    time = np.array([0.0 for _ in range(len(point) - 1)])
+    utilization = np.array([0.0 for _ in range(len(point) - 1)])
+    idle_time = np.array([0.0 for _ in range(len(point) - 1)])
+    working_time = np.array([0.0 for _ in range(len(point) - 1)])
+
+    for i in range(len(point) - 1):
+        time[i] = point[i + 1]
+        utilization[i], idle_time[i], working_time[i] \
+            = cal_utilization_avg(log, name, type, num=num, start_time=point[i], finish_time=point[i + 1])
+
+    if display or save:
+        graph(time, utilization, title="Utilization", display=display, save=save)
+        graph(time, idle_time, title="Idle time", display=display, save=save)
+        graph(time, working_time, title="Working time", display=display, save=save)
+
+    result = pd.DataFrame({"Time": time, "Utilization": utilization, "Idle_time": idle_time, "Working_time": working_time})
+    return result
+'''
+
+
+'''
 def calculate_wip(log, start_time=0.0, finish_time=0.0, time_interval=0.1, display=False, save=False):
     if int((finish_time - start_time) / time_interval) <= 0:
         print("time interval is too wide")
@@ -159,14 +226,14 @@ def calculate_wip(log, start_time=0.0, finish_time=0.0, time_interval=0.1, displ
 
     result = pd.DataFrame({"Time": time, "WIP": wip})
     return result
-
-
+'''
+''''
 def calculate_wip_avg(log, start_time=0.0, finish_time=0.0):
     part_created = log[log["Event"] == "part_created"]
     completed = log[log["Event"] == "completed"]
     part_created = part_created[(part_created["Time"] >= start_time) & (part_created["Time"] <= finish_time)]
     completed = completed[(completed["Time"] >= start_time) & (completed["Time"] <= finish_time)]
-
+'''
 
 
 def wip(data, WIP_type=None, type =None, name=None):
