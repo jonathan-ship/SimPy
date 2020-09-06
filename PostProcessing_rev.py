@@ -252,7 +252,11 @@ def gantt(data, process_list):
         data_by_group = part_data.groupby(part_data["Process"])
         for i, group in data_by_group:
             if (i != "Sink") and (i != "Source"):
-                dataframe.append(dict(Task=i, Start=(start + datetime.timedelta(days=data_by_group["Time"][data_by_group["Event"] == "work_start"])).isoformat(),Finish=(start + datetime.timedelta(days=data_by_group["Time"][data_by_group["Event"] == "work_finish"])).isoformat(), Resource=part))
+                work_start = group[group["Event"] == "work_start"]
+                work_start = list(work_start["Time"].reset_index(drop=True))
+                work_finish = group[group["Event"] == "work_finish"]
+                work_finish = list(work_finish["Time"].reset_index(drop=True))
+                dataframe.append(dict(Task=i, Start=(start + datetime.timedelta(days=work_start[0])).isoformat(),Finish=(start + datetime.timedelta(days=work_finish[0])).isoformat(), Resource=part))
                 colors.append('#%02X%02X%02X' % (r(), r(), r()))
             else:
                 pass
