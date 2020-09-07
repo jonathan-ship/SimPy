@@ -20,7 +20,7 @@ def graph(x, y, title=None, display=False, save=False, filepath=None):
     if display:
         plt.show()
     if save:
-        plt.savefig(filepath + "/" + title + ".png")
+        fig.savefig(filepath + "/" + title + ".png")
 
 
 def cal_utilization(log, name=None, type=None, num=1, start_time=0.0, finish_time=0.0, step=None, display=False, save=False, filepath=None):
@@ -249,9 +249,10 @@ def gantt(data, process_list):
 
     for part in list_part:
         part_data = data[data["Part"] == part]
-        data_by_group = part_data.groupby(part_data["Process"])
-        for i, group in data_by_group:
-            if (i != "Sink") and (i != "Source"):
+        #data_by_group = part_data.groupby(part_data["Process"])
+        for i in process_list:
+            group = part_data[part_data["Process"] == i]
+            if (i != "Sink") and (i != "Source") and len(group) != 0:
                 work_start = group[group["Event"] == "work_start"]
                 work_start = list(work_start["Time"].reset_index(drop=True))
                 work_finish = group[group["Event"] == "work_finish"]
