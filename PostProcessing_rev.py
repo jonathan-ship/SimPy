@@ -1,10 +1,8 @@
 import numpy as np
 import pandas as pd
-from datetime import timedelta
 import datetime
 import random
 import matplotlib.pyplot as plt
-
 import plotly.figure_factory as ff
 
 
