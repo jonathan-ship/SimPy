@@ -1,15 +1,10 @@
 import numpy as np
 import pandas as pd
-import math as m
-import gantt
-import time
 from datetime import timedelta
 import datetime
 import random
 import matplotlib.pyplot as plt
 
-import sys
-sys.path.insert(0, 'c:\pyzo2015a\lib\site-packages\plotly')
 import plotly.figure_factory as ff
 
 
@@ -21,7 +16,6 @@ def graph(x, y, title=None, display=False, save=False, filepath=None):
         plt.show()
     if save:
         fig.savefig(filepath + "/" + title + ".png")
-
 
 def cal_utilization(log, name=None, type=None, num=1, start_time=0.0, finish_time=0.0, step=None, display=False, save=False, filepath=None):
     log = log[(log[type] == name) & ((log["Event"] == "work_start") | (log["Event"] == "work_finish"))]
@@ -159,7 +153,7 @@ def cal_throughput(log, name, type, start_time=0.0, finish_time=0.0, step=None, 
         throughput = pd.DataFrame({"Time": time[1:], "Throughput": throughput[:-1]})
         if display or save:
             title = "throughput of {0} in ({1:.2f}, {2:.2f})".format(name, start_time, finish_time)
-            graph(throughput["Time"], throughput["Utilization"], title=title, display=display, save=save, filepath=filepath)
+            graph(throughput["Time"], throughput["Throughput"], title=title, display=display, save=save, filepath=filepath)
         return throughput
     else:
         return throughput[0]
@@ -234,7 +228,7 @@ def cal_wip(log, name=None, type=None, mode="m", start_time=0.0, finish_time=0.0
         wip = pd.DataFrame({"Time": time[1:], "WIP": wip[:-1]})
         if display or save:
             title = "WIP of {0} in ({1:.2f}, {2:.2f})".format(name, start_time, finish_time)
-            graph(wip["Time"], wip["Utilization"], title=title, display=display, save=save, filepath=filepath)
+            graph(wip["Time"], wip["WIP"], title=title, display=display, save=save, filepath=filepath)
         return wip
     else:
         return wip[0]
