@@ -5,7 +5,6 @@ import random
 import matplotlib.pyplot as plt
 import plotly.figure_factory as ff
 
-
 def graph(x, y, title=None, display=False, save=False, filepath=None):
     fig, ax = plt.subplots()
     ax.plot(x, y)
