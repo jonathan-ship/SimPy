@@ -373,4 +373,3 @@ class Monitor(object):
         with open(self.filename, 'a') as f:
             f.write('\n{0},{1},{2},{3},{4}'.format(time, event, part_id, process, subprocess))
 
-
