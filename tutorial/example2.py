@@ -8,7 +8,7 @@ def speaker(env, i):
         yield env.timeout(talking_time)
     except simpy.Interrupt as interrupt:
         print("{}th speaker's talking is interrupted at {:.2f} sec".format(i, env.now))
-        #print(interrupt.cause)
+        print(interrupt.cause)
 
 def moderator(env):
     for i in range(3):
