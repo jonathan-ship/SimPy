@@ -1,17 +1,9 @@
 import numpy as np
 import pandas as pd
-import math as m
-import gantt
-import time
-from datetime import timedelta
 import datetime
 import random
 import matplotlib.pyplot as plt
-
-import sys
-sys.path.insert(0, 'c:\pyzo2015a\lib\site-packages\plotly')
 import plotly.figure_factory as ff
-
 
 def graph(x, y, title=None, display=False, save=False, filepath=None):
     fig, ax = plt.subplots()
@@ -20,8 +12,7 @@ def graph(x, y, title=None, display=False, save=False, filepath=None):
     if display:
         plt.show()
     if save:
-        plt.savefig(filepath + "/" + title + ".png")
-
+        fig.savefig(filepath + "/" + title + ".png")
 
 def cal_utilization(log, name=None, type=None, num=1, start_time=0.0, finish_time=0.0, step=None, display=False, save=False, filepath=None):
     log = log[(log[type] == name) & ((log["Event"] == "work_start") | (log["Event"] == "work_finish"))]
@@ -159,7 +150,7 @@ def cal_throughput(log, name, type, start_time=0.0, finish_time=0.0, step=None, 
         throughput = pd.DataFrame({"Time": time[1:], "Throughput": throughput[:-1]})
         if display or save:
             title = "throughput of {0} in ({1:.2f}, {2:.2f})".format(name, start_time, finish_time)
-            graph(throughput["Time"], throughput["Utilization"], title=title, display=display, save=save, filepath=filepath)
+            graph(throughput["Time"], throughput["Throughput"], title=title, display=display, save=save, filepath=filepath)
         return throughput
     else:
         return throughput[0]
@@ -234,11 +225,10 @@ def cal_wip(log, name=None, type=None, mode="m", start_time=0.0, finish_time=0.0
         wip = pd.DataFrame({"Time": time[1:], "WIP": wip[:-1]})
         if display or save:
             title = "WIP of {0} in ({1:.2f}, {2:.2f})".format(name, start_time, finish_time)
-            graph(wip["Time"], wip["Utilization"], title=title, display=display, save=save, filepath=filepath)
+            graph(wip["Time"], wip["WIP"], title=title, display=display, save=save, filepath=filepath)
         return wip
     else:
         return wip[0]
-
 
 def gantt(data, process_list):
     list_part = list(data["Part"][data["Event"] == "part_created"])
@@ -249,17 +239,19 @@ def gantt(data, process_list):
     colors = ['#%02X%02X%02X' % (r(), r(), r())]
 
     for part in list_part:
-        for i in range(len(process_list)):
-            part_data = data[data["Part"] == part]
-            part_start = list((part_data["Time"][(part_data["Event"] == "work_start") | (part_data["Event"] == "part_created")]).reset_index(drop=True))
-            part_finish = list((part_data["Time"][(part_data["Event"] == "work_finish") | (part_data["Event"] == "part_transferred") & (part_data["Process"] == "Source")]).reset_index(drop=True))
-            if len(part_start) != (len(process_list) + 1):
-                if part_data["Time"][(part_data["Event"] == "work_start") & (part_data["Process"] == process_list[i])] not in part_start:
-                    part_start.insert(i+1, part_data["Time"]["Event"] == "part_transferred" & part_data["Process"] == process_list[i-1])
-                    part_finish.insert(i+1, part_data["Time"]["Event"] == "work_finish" & part_data["Process"] == process_list[i+1])
-
-            dataframe.append(dict(Task=process_list[i], Start=(start + datetime.timedelta(days=part_start[i+1])).isoformat(), Finish=(start + datetime.timedelta(days=part_finish[i+1])).isoformat(),Resource=part))
-            colors.append('#%02X%02X%02X' % (r(), r(), r()))
+        part_data = data[data["Part"] == part]
+        #data_by_group = part_data.groupby(part_data["Process"])
+        for i in process_list:
+            group = part_data[part_data["Process"] == i]
+            if (i != "Sink") and (i != "Source") and len(group) != 0:
+                work_start = group[group["Event"] == "work_start"]
+                work_start = list(work_start["Time"].reset_index(drop=True))
+                work_finish = group[group["Event"] == "work_finish"]
+                work_finish = list(work_finish["Time"].reset_index(drop=True))
+                dataframe.append(dict(Task=i, Start=(start + datetime.timedelta(days=work_start[0])).isoformat(),Finish=(start + datetime.timedelta(days=work_finish[0])).isoformat(), Resource=part))
+                colors.append('#%02X%02X%02X' % (r(), r(), r()))
+            else:
+                pass
 
     fig = ff.create_gantt(dataframe, colors=colors, index_col='Resource', group_tasks=True)
     fig.show()
