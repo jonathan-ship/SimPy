@@ -5,9 +5,6 @@ from collections import deque
 import pandas as pd
 import numpy as np
 
-from PostProcessing_rev import *
-
-
 save_path = './result'
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -73,95 +70,6 @@ class Source(object):
                 break
 
 
-class Process_without_subprocess(object):
-    def __init__(self, env, name, server_num, process_dict, monitor, qlimit=float('inf')):
-        self.env = env
-        self.name = name
-        self.server_num = server_num
-        self.process_dict = process_dict
-        self.Monitor = monitor
-        self.qlimit = qlimit
-
-        self.server = [None for _ in range(server_num)]
-        self.queue = deque([])
-        self.waiting = {}
-        self.delay_part_id = []
-        self.parts_rec = 0
-        self.parts_sent = 0
-        self.flag = False
-        self.len_of_server = []
-
-    def run(self, part, server_id):
-        # record: work_start
-        self.Monitor.record(self.env.now, self.name, '{0}_{1}'.format(self.name, server_id), part_id=part.id, event="work_start")
-        # work start
-        proc_time = part.data[(part.step, 'process_time')]
-        yield self.env.timeout(proc_time)
-
-        # record: work_finish
-        self.Monitor.record(self.env.now, self.name, '{0}_{1}'.format(self.name, server_id), part_id=part.id, event="work_finish")
-
-        # next process
-        next_process = part.data[(part.step + 1, 'process')]
-
-        if self.process_dict[next_process].__class__.__name__ == 'Process':
-            # lag: 후행공정 시작시간 - 선행공정 종료시간
-            lag = part.data[(part.step + 1, 'start_time')] - self.env.now
-            if lag > 0:
-                yield self.env.timeout(lag)
-
-            # 대기 event 발생
-            if len(self.process_dict[next_process].queue) + (self.process_dict[next_process].server_num - self.process_dict[next_process].server.count(None)) >= self.process_dict[next_process].qlimit:
-                self.process_dict[next_process].waiting[part.id] = self.env.event()
-                self.process_dict[next_process].delay_part_id.append(part.id)
-                # record: delay_start
-                self.Monitor.record(self.env.now, self.name, '{0}_{1}'.format(self.name, server_id), part_id=part.id, event="delay_start")
-
-                yield self.process_dict[next_process].waiting[part.id]
-                self.Monitor.record(self.env.now, self.name, '{0}_{1}'.format(self.name, server_id), part_id=part.id,
-                                    event="delay_finish")
-
-        # record: part_transferred
-        self.Monitor.record(self.env.now, self.name, '{0}_{1}'.format(self.name, server_id), part_id=part.id, event="part_transferred")
-        # part_transferred
-        self.process_dict[next_process].put(part)
-        part.step += 1
-        self.parts_sent += 1
-
-        if len(self.queue) > 0:
-            part = self.queue.popleft()
-            self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="routing_ended")
-            self.server[server_id] = self.env.process(self.run(part, server_id))
-            # record: queue_released
-            self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="queue_released")
-        else:
-            self.server[server_id] = None
-
-        # 대기 종료
-        server, queue = self.get_num_of_part()
-        if server + queue < self.qlimit and len(self.waiting) > 0:
-            delay_part = self.delay_part_id.pop(0)
-            self.waiting.pop(delay_part).succeed()
-
-    def put(self, part):
-        self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process_entered")
-        self.parts_rec += 1
-        if self.server.count(None) != 0:  # server에 자리가 있으면
-            self.server[self.server.index(None)] = self.env.process(self.run(part, self.server.index(None)))
-            self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="routing_ended")
-        else:  # server가 다 차 있으면
-            self.queue.append(part)
-            # record: queue_entered
-            self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="queue_entered")
-        self.len_of_server.append(self.server_num - self.server.count(None))
-
-    def get_num_of_part(self):
-        queue = len(self.queue)
-        server = self.server_num - self.server.count(None)
-
-        return server, queue
-
-
 class Process(object):
     def __init__(self, env, name, server_num, process_dict, monitor, process_time=None, qlimit=float('inf'), routing_logic="cyclic"):
         self.env = env
@@ -193,25 +101,7 @@ class Process(object):
 
         self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="routing_ended")
 
-        # lag: 현행공정 계획된 시작시간 - 현재 시각
-        # if part.data[(part.step + step, 'start_time')] and process_from != 'Source':
-        #     lag = part.data[(part.step + step, 'start_time')] - self.env.now
-        #     if lag > 0:
-        #         yield self.env.timeout(lag)
-
-        # # delay start
-        # server, queue = self.get_num_of_part()
-        # if queue + server >= self.qlimit:
-        #     self.server[self.server_idx].waiting.append(self.env.event())
-        #     # record: delay_start
-        #     self.Monitor.record(self.env.now, process_from, subprocess_from, part_id=part.id, event="delay_start")
-        #
-        #     yield self.server[self.server_idx].waiting[-1]
-        #     # record: delay_finish
-        #     self.Monitor.record(self.env.now, process_from, subprocess_from, part_id=part.id, event="delay_finish")
-
-        # record: part_transferred
-        # self.Monitor.record(self.env.now, process_from, subprocess_from, part_id=part.id, event="part_transferred")
+        # queue enter
         self.Monitor.record(self.env.now, self.name, self.server[self.server_idx].name, part_id=part.id, event="queue_entered")
         self.server[self.server_idx].sub_queue.put(part)
         self.len_of_server.append(self.server_idx)
@@ -310,7 +200,6 @@ class SubProcess(object):
 
             self.part.step += step
 
-
             # delay finish
             server, queue = self.process_dict[self.process_name].get_num_of_part()
             if (server + queue < self.process_dict[self.process_name].qlimit) and (len(self.process_dict[self.process_name].waiting) > 0):
@@ -343,10 +232,6 @@ class Routing(object):
 
     def most_unutilized(self):
         utilization_list = [(server.working_time/server.total_time if server.total_time != 0 else 0) for server in self.server]
-        # utilization_list = self.server.apply(lambda x: x.working_time/x.total_time if x.total_time != 0 else 0)
-        # for server in self.server:
-        #     u = server.working_time / server.total_time if server.total_time !=0 else 0
-        #     utilization_list.append(u)
         idx_min_list = np.argwhere(utilization_list == np.min(utilization_list))
         idx_min_list = idx_min_list.flatten().tolist()
         idx_min = random.choice(idx_min_list)
@@ -354,12 +239,10 @@ class Routing(object):
 
     def first_possible(self):
         idx_possible = random.choice(range(len(self.server)))  # random index로 초기화 - 모든 서버가 가동중일 때, 서버에 random하게 파트 할당
-
         for i in range(len(self.server)):
             if self.server[i].flag == False:  # 만약 미가동중인 server가 존재할 경우, 해당 서버에 part 할당
                 idx_possible = i
                 break
-
         return idx_possible
 
 
