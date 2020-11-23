@@ -6,11 +6,9 @@ Server service time: 각 10초씩
 '''
 import simpy
 import pandas as pd
-import numpy as np
 import time
-import os
 
-from SimComponents_rev import Source, Sink, Process, Monitor
+from SimComponents import Source, Sink, Process, Monitor
 
 start_run = time.time()
 
@@ -67,7 +65,7 @@ print("total time : ", finish_sim - start_run)
 print("simulation execution time :", finish_sim - start_sim)  # 시뮬레이션 종료 시각
 
 # Post-Processing
-from PostProcessing_rev import *
+from PostProcessing import *
 event_tracer = pd.read_csv(filename)
 print('#' * 80)
 print("Post-Processing")
@@ -92,4 +90,4 @@ for i in range(server_num):
 print("average lead time: ", cal_leadtime(event_tracer, finish_time=run_time))
 
 # WIP
-print("WIP of entire model: ", np.mean(wip(event_tracer, WIP_type="WIP_m")))
+print("WIP of entire model: ", np.mean(cal_wip(event_tracer)))

@@ -5,8 +5,7 @@ import scipy.stats as st
 import numpy as np
 import pandas as pd
 
-from SimComponents import Sink, Process, Source
-from Postprocessing import Utilization, Queue
+from SimComponents import Sink, Process, Source, Monitor
 
 # 코드 실행 시작 시각
 start_0 = time.time()
@@ -44,40 +43,42 @@ data[(3, 'process_time')] = None
 data[(3, 'process')] = 'Sink'
 
 data = pd.concat([df_part, data], axis=1)
+process_list = ['Assembly', 'Outfitting', 'Painting']
 
 # Modeling
 env = simpy.Environment()
 
 ##
-event_tracer = {"event": [], "time": [], "part": [], "process": []}
-process_list = ['Assembly', 'Outfitting', 'Painting']
-process_dict = {}
-process = []
+model = {}
 
 # 작업장 수
-m_assy = 295
-m_oft = 285
-m_pnt = 232
-m_dict = {'Assembly': m_assy, 'Outfitting': m_oft, 'Painting': m_pnt}
+m_assy = 2
+m_oft = 2
+m_pnt = 2
+server_num = [m_assy, m_oft, m_pnt]
+filename = './result/event_log_block_movement_fitting.csv'
+Monitor = Monitor(filename)
 
-# Source, Sink modeling
-Source = Source(env, 'Source', data, process_dict, len(data), event_tracer=event_tracer, data_type="df")
-Sink = Sink(env, 'Sink', rec_lead_time=True, rec_arrivals=True)
-# Process modeling
-for i in range(len(process_list)):
-    process.append(Process(env, process_list[i], m_dict[process_list[i]], process_dict, event_tracer=event_tracer,
-                           qlimit=10000))
-for i in range(len(process_list)):
-    process_dict[process_list[i]] = process[i]
-process_dict['Sink'] = Sink
+# Source
+Source = Source(env, 'Source', data, model, Monitor)
+
+# Process Modeling
+for i in range(len(process_list) + 1):
+    if i == len(process_list):
+        model['Sink'] = Sink(env, 'Sink', Monitor)
+    else:
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
 # Run it
 start = time.time()  # 시뮬레이션 시작 시각
 env.run()
 finish = time.time()  # 시뮬레이션 종료 시각
 
+for process in process_list:
+    print("server: ", np.max(model[process].len_of_server))
+
 print('#' * 80)
-print("Results of simulation")
+print("Results of Block Transfer(fitting) simulation")
 print('#' * 80)
 
 # 코드 실행 시간
@@ -85,37 +86,22 @@ print("data pre-processing : ", start - start_0)
 print("simulation execution time :", finish - start)
 print("total time : ", finish - start_0)
 
-# 총 리드타임 - 마지막 part가 Sink에 도달하는 시간
-print("Total Lead Time :", Sink.last_arrival)
-
-# save data
-save_path = './result'
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
-# event tracer dataframe으로 변환
-df_event_tracer = pd.DataFrame(event_tracer)
-df_event_tracer.to_excel(save_path + '/event_block_transfer_fitting.xlsx')
-
 # DATA POST-PROCESSING
 # Event Tracer을 이용한 후처리
+from PostProcessing import *
 print('#' * 80)
 print("Data Post-Processing")
 print('#' * 80)
 
-# 가동율
-Utilization = Utilization(df_event_tracer, process_dict, process_list)
-Utilization.utilization()
-utilization = Utilization.u_dict
-
-for process in process_list:
-    print("utilization of {} : ".format(process), utilization[process])
-
-# process 별 평균 대기시간, 총 대기시간
-Queue = Queue(df_event_tracer, process_list)
-Queue.waiting_time()
+event_tracer = pd.read_csv(filename)
+# 가동률
 print('#' * 80)
-for process in process_list:
-    print("average waiting time of {} : ".format(process), Queue.average_waiting_time_dict[process])
-for process in process_list:
-    print("total waiting time of {} : ".format(process), Queue.total_waiting_time_dict[process])
+for i in range(len(process_list)):
+    process = process_list[i]
+    u, idle, working_time = cal_utilization(event_tracer, process, "Process", finish_time=model['Sink'].last_arrival)
+    print("utilization of {0} : ".format(process), u)
+    print("idle time of {0} : ".format(process), idle)
+    print("total working time of {0} : ".format(process), working_time)
+    print("#"*80)
+
+print("total lead time: ", model['Sink'].last_arrival)

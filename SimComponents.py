@@ -20,10 +20,10 @@ class Part(object):
 
 
 class Source(object):
-    def __init__(self, env, name, block_data, process_dict, monitor):
+    def __init__(self, env, name, part_data, process_dict, monitor):
         self.env = env
         self.name = name
-        self.block_data = block_data
+        self.part_data = part_data
         self.process_dict = process_dict
         self.Monitor = monitor
 
@@ -34,7 +34,7 @@ class Source(object):
     def run(self):
         while True:
             # block_data로부터 part 정보 읽어주기
-            part_id, data = self.block_data.index[self.parts_sent], self.block_data.iloc[self.parts_sent]
+            part_id, data = self.part_data.index[self.parts_sent], self.part_data.iloc[self.parts_sent]
 
             # Part class로 modeling
             part = Part(part_id, data)
@@ -65,7 +65,7 @@ class Source(object):
             self.process_dict[next_process].put(part)
             self.parts_sent += 1
 
-            if self.parts_sent == len(self.block_data):
+            if self.parts_sent == len(self.part_data):
                 print("all parts are sent at : ", self.env.now)
                 break
 
@@ -93,7 +93,7 @@ class Process(object):
         # Routing
         routing = Routing(self.server)
         if self.routing_logic == "least_utilized":  # routing logic = least utilized
-            self.server_idx = routing.most_unutilized()
+            self.server_idx = routing.least_utilized()
         elif self.routing_logic == "first_possible":  # routing_logic = first possible
             self.server_idx = routing.first_possible()
         else:  # routing logic = cyclic
@@ -106,6 +106,7 @@ class Process(object):
         self.server[self.server_idx].sub_queue.put(part)
         self.len_of_server.append(self.server_idx)
 
+    # 본 공정에 존재하는 가동 중인 서버 개수, queue에 존재하는 part의 개수 반환 --> qlimit와 비교하여 delay 여부 결정
     def get_num_of_part(self):
         server_num = 0
         queue = 0
@@ -113,7 +114,6 @@ class Process(object):
             subprocess = self.server[i]
             server_num += 1 if subprocess.flag == True else 0
             queue += len(subprocess.sub_queue.items)
-
         return server_num, queue
 
 
@@ -230,7 +230,7 @@ class Routing(object):
     def __init__(self, server):
         self.server = server  # routing logic을 적용할 server
 
-    def most_unutilized(self):
+    def least_utilized(self):
         utilization_list = [(server.working_time/server.total_time if server.total_time != 0 else 0) for server in self.server]
         idx_min_list = np.argwhere(utilization_list == np.min(utilization_list))
         idx_min_list = idx_min_list.flatten().tolist()
@@ -240,7 +240,7 @@ class Routing(object):
     def first_possible(self):
         idx_possible = random.choice(range(len(self.server)))  # random index로 초기화 - 모든 서버가 가동중일 때, 서버에 random하게 파트 할당
         for i in range(len(self.server)):
-            if self.server[i].flag == False:  # 만약 미가동중인 server가 존재할 경우, 해당 서버에 part 할당
+            if self.server[i].flag is False:  # 만약 미가동중인 server가 존재할 경우, 해당 서버에 part 할당
                 idx_possible = i
                 break
         return idx_possible

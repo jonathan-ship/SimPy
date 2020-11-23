@@ -10,6 +10,7 @@ from SimComponents import Source, Sink, Process, Monitor
 # 코드 실행 시각
 start_run = time.time()
 
+## Pre-Processing
 # DATA INPUT
 data_all = pd.read_excel('./data/MCM_ACTIVITY.xls')
 data = data_all[['PROJECTNO', 'ACTIVITYCODE', 'LOCATIONCODE', 'PLANSTARTDATE', 'PLANFINISHDATE', 'PLANDURATION']]
@@ -38,14 +39,15 @@ for block_code in block_list:
     temp = temp_1.reset_index(drop=True, inplace=False)
     activity_num.append(len(temp))
 
+## 최대 activity 개수
 max_num_of_activity = np.max(activity_num)
 
 # S-Module에 넣어 줄 dataframe(중복된 작업시간 처리)
-# 13 : 한 블록이 거치는 공정의 최대 개수(12) + Sink  --> 수정 필요
 columns = pd.MultiIndex.from_product([[i for i in range(max_num_of_activity + 1)], ['start_time', 'process_time', 'process']])
 df = pd.DataFrame([], columns=columns)
 idx = 0  # df에 저장된 block 개수
 
+## 중복 부분 잘라주기  --> 미리 잘라주는 것이 맞는 지는 조금 더 고려해 볼 필요가 있음
 for block_code in block_list:
     temp = data[data['BLOCKCODE'] == block_code]
     temp_1 = temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=False)
@@ -53,35 +55,28 @@ for block_code in block_list:
     temp_list = []
     df.loc[idx] = [None for _ in range(len(df.columns))]
     n = 0  # 저장된 공정 개수
-
     for i in range(0, len(temp) - 1):
         activity = temp['ACTIVITY'][i]
         date1 = temp['PLANFINISHDATE'][i]  # 선행공정 종료날짜
         date2 = temp['PLANSTARTDATE'][i+1]  # 후행공정 시작날짜
         date3 = temp['PLANFINISHDATE'][i+1]  # 후행공정 종료날짜
-
         if date1 > date2:  # 후행공정이 선행공정 종료 전에 시작할 때
             if date1 > date3:  # 후행공정이 선행공정에 포함될 때
                 temp.loc[i+1, 'PLANDURATION'] = -1
             else:
                 temp.loc[i+1, 'PLANDURATION'] -= date2 - date1
-
         if temp['PLANDURATION'][i] > 0:
             df.loc[idx][n] = [temp['PLANSTARTDATE'][i], temp['PLANDURATION'][i], activity]
             n += 1
-
     if temp['PLANDURATION'][len(temp)-1] > 0:
         df.loc[idx][n] = [temp['PLANSTARTDATE'][len(temp)-1], temp['PLANDURATION'][len(temp)-1], temp['ACTIVITY'][len(temp)-1]]
         n += 1
-
     df.loc[idx][(n, 'process')] = 'Sink'
-
     # temp = temp[temp['PLANDURATION'] >= 0]
     idx += 1
 
 df.sort_values(by=[(0, 'start_time')], axis=0, inplace=True)
 df = df.reset_index(drop=True)
-
 df = pd.concat([df_part, df], axis=1)
 
 # Modeling
@@ -93,7 +88,7 @@ server_num = [1 for _ in range(len(process_list))]
 
 # Monitoring
 filename = './result/event_log_master_plan.csv'
-Monitor = Monitor(filename, len(df))
+Monitor = Monitor(filename)
 
 # Source, Sink modeling
 Source = Source(env, 'Source', df, model, Monitor)
@@ -103,7 +98,7 @@ for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, qlimit=1)
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
 # Run it
 df.to_excel('./master_plan_전처리.xlsx')

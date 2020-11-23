@@ -1,10 +1,10 @@
 import simpy
 import time
-import os
 import scipy.stats as st
 import pandas as pd
+import numpy as np
 
-from SimComponents_rev import Sink, Process, Source
+from SimComponents import Sink, Process, Source, Monitor
 
 # 코드 실행 시작 시각
 start_0 = time.time()
@@ -35,46 +35,62 @@ data[(2, 'process')] = 'Sink'
 
 data = pd.concat([df_part, data], axis=1)
 
-# Modeling
-env = simpy.Environment()
-
 ##
-event_tracer = pd.DataFrame(columns=["TIME", "EVENT", "PART", "PROCESS", "SERVER_ID"])
+env = simpy.Environment()
 model = {}
-server_num = [1 for _ in range(len(process_list))]
 
-# Modeling
+# 작업장 수
+m_assy = 2
+m_oft = 2
+m_pnt = 2
+server_num = [m_assy, m_oft, m_pnt]
+filename = './result/event_log_factory_physics.csv'
+Monitor = Monitor(filename)
+
 # Source
-Source = Source(env, 'Source', data, model, event_tracer)
+Source = Source(env, 'Source', data, model, Monitor)
 
+# Process Modeling
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink')
+        model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, event_tracer, qlimit=1)
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
 # Run it
-start = time.time()
+start = time.time()  # 시뮬레이션 시작 시각
 env.run()
-finish = time.time()
+finish = time.time()  # 시뮬레이션 종료 시각
+
+for process in process_list:
+    print("server: ", np.max(model[process].len_of_server))
 
 print('#' * 80)
-print("Results of simulation")
+print("Results of Factory Physics Simulation")
 print('#' * 80)
 
 # 코드 실행 시간
-print("data pre-processing : ", start - start_0)  # 시뮬레이션 시작 시각
+print("data pre-processing : ", start - start_0)
+print("simulation execution time :", finish - start)
 print("total time : ", finish - start_0)
-print("simulation execution time :", finish - start)  # 시뮬레이션 종료 시각
 
+# DATA POST-PROCESSING
+# Event Tracer을 이용한 후처리
+from PostProcessing import *
+print('#' * 80)
+print("Data Post-Processing")
+print('#' * 80)
 
+event_tracer = pd.read_csv(filename)
+# 가동률
+print('#' * 80)
+for i in range(len(process_list)):
+    process = process_list[i]
+    u, idle, working_time = cal_utilization(event_tracer, process, "Process", finish_time=model['Sink'].last_arrival)
+    print("utilization of {0} : ".format(process), u)
+    print("idle time of {0} : ".format(process), idle)
+    print("total working time of {0} : ".format(process), working_time)
+    print("#"*80)
 
-# save data
-save_path = './result'
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
-# event tracer dataframe으로 변환
-df_event_tracer = pd.DataFrame(event_tracer)
-df_event_tracer.to_excel(save_path + '/event_Factory_Physics.xlsx')
+print("total lead time: ", model['Sink'].last_arrival)
 

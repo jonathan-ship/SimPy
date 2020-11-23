@@ -4,7 +4,7 @@ import time
 import pandas as pd
 import scipy.stats as st
 
-from SimComponents_rev import Source, Sink, Process, Monitor
+from SimComponents import Source, Sink, Process, Monitor
 
 # 코드 실행 시작 시각
 start_0 = time.time()
@@ -80,17 +80,4 @@ print('#' * 80)
 print("data pre-processing : ", start - start_0)
 print("total time : ", finish - start_0)
 print("simulation execution time :", finish - start)
-#
-# # save data
-# save_path = './result'
-# if not os.path.exists(save_path):
-#     os.makedirs(save_path)
-#
-# # event tracer 저장
-# event_tracer.to_excel(save_path +'/event_supply_chain.xlsx')
-#
-# event_tracer = pd.read_csv(filename)
 
-# from PostProcessing_rev import Utilization
-# u = Utilization(event_tracer, model, process_list[0], model['Sink'].last_arrival)
-# print(process_list[0], ": ", u.utilization())
