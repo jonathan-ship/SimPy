@@ -87,8 +87,8 @@ model = {}
 server_num = [1 for _ in range(len(process_list))]
 
 # Monitoring
-filename = './result/event_log_master_plan.csv'
-Monitor = Monitor(filename)
+filepath = './result/event_log_master_plan.csv'
+Monitor = Monitor(filepath)
 
 # Source, Sink modeling
 Source = Source(env, 'Source', df, model, Monitor)
@@ -121,3 +121,4 @@ print("data pre-processing : ", start - start_run)
 print("simulation execution time :", finish - start)
 print("total time : ", finish - start_run)
 
+event_tracer = Monitor.save_event_tracer()

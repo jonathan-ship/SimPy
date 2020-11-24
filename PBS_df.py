@@ -22,18 +22,21 @@ process_list = ["plate_weld", "saw_front", "turn_over", "saw_back", "longi_attac
 part = list(data["product"])
 # 작업 정보, 7 = 공정 수 + Sink
 columns = pd.MultiIndex.from_product([[i for i in range(len(process_list)+1)], ['start_time', 'process_time', 'process']])
-df = pd.DataFrame([], columns=columns, index=part)
+df = pd.DataFrame(columns=columns, index=part)
 
 IAT = st.expon.rvs(loc=3, scale=1, size=len(data))
 start_time = IAT.cumsum()
 
+# process + Sink --> len(process_list) + 1
 for i in range(len(process_list) + 1):
-    if i == len(process_list):  # Sink
+    # Sink 모델링
+    if i == len(process_list):
         df[(i, 'start_time')] = None
         df[(i, 'process_time')] = None
         df[(i, 'process')] = 'Sink'
-    else:  # 공정
-        df[(i, 'start_time')] = 0
+    # 공정 모델링
+    else:
+        df[(i, 'start_time')] = 0 if i!= 0 else start_time
         df[(i, 'process_time')] = list(data[process_list[i]])
         df[(i, 'process')] = process_list[i]
 
@@ -44,8 +47,8 @@ env = simpy.Environment()
 ##
 model = {}
 server_num = [1 for _ in range(len(process_list))]
-filename = './result/event_log_PBS_fin.csv'
-Monitor = Monitor(filename)
+filepath = './result/event_log_PBS_fin.csv'
+Monitor = Monitor(filepath)
 
 # Modeling
 # Source
@@ -56,7 +59,7 @@ for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, 'Sink', Monitor)
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, qlimit=1)
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
 # Simulation
 start = time.time()  # 시뮬레이션 실행 시작 시각
@@ -75,7 +78,8 @@ print("simulation execution time :", finish - start)
 print('#' * 80)
 
 from PostProcessing import *
-event_tracer = pd.read_csv(filename)
+
+event_tracer = Monitor.save_event_tracer()
 
 print("Total Flow time : ", model['Sink'].last_arrival)
 

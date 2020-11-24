@@ -38,8 +38,8 @@ model = {}
 process_time = {"Process1": [10.0, 10.0, 10.0]}
 
 # Monitoring
-filename = './result/event_log_DD3_1.csv'
-Monitor = Monitor(filename)
+filepath = './result/event_log_DD3_1.csv'
+Monitor = Monitor(filepath)
 
 Source = Source(env, 'Source', data, model, Monitor)
 
@@ -66,7 +66,9 @@ print("simulation execution time :", finish_sim - start_sim)  # 시뮬레이션 
 
 # Post-Processing
 from PostProcessing import *
-event_tracer = pd.read_csv(filename)
+
+event_tracer = Monitor.save_event_tracer()
+
 print('#' * 80)
 print("Post-Processing")
 print("D/D/3 Case 1")

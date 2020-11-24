@@ -64,8 +64,8 @@ m_assy = 2
 m_oft = 2
 m_pnt = 2
 server_num = [m_assy, m_oft, m_pnt]
-filename = './result/event_log_block_movement_actual.csv'
-Monitor = Monitor(filename)
+filepath = './result/event_log_block_movement_actual.csv'
+Monitor = Monitor(filepath)
 
 # Source
 Source = Source(env, 'Source', df, model, Monitor)
@@ -82,17 +82,17 @@ start = time.time()  # 시뮬레이션 시작 시각
 env.run()
 finish = time.time()  # 시뮬레이션 종료 시각
 
-for process in process_list:
-    print("server: ", np.max(model[process].len_of_server))
 
 print('#' * 80)
-print("Results of Block Transfer(actual) simulation / Process / m = 2")
+print("Results of Block Transfer(actual) simulation")
 print('#' * 80)
 
 # 코드 실행 시간
 print("data pre-processing : ", start - start_0)
 print("simulation execution time :", finish - start)
 print("total time : ", finish - start_0)
+
+event_tracer = Monitor.save_event_tracer()
 
 # DATA POST-PROCESSING
 # Event Tracer을 이용한 후처리
@@ -101,7 +101,6 @@ print('#' * 80)
 print("Data Post-Processing")
 print('#' * 80)
 
-event_tracer = pd.read_csv(filename)
 # 가동률
 print('#' * 80)
 for i in range(len(process_list)):
@@ -113,5 +112,3 @@ for i in range(len(process_list)):
     print("#"*80)
 
 print("total lead time: ", model['Sink'].last_arrival)
-
-

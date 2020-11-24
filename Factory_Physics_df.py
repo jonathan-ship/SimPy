@@ -44,8 +44,8 @@ m_assy = 2
 m_oft = 2
 m_pnt = 2
 server_num = [m_assy, m_oft, m_pnt]
-filename = './result/event_log_factory_physics.csv'
-Monitor = Monitor(filename)
+filepath = './result/event_log_factory_physics.csv'
+Monitor = Monitor(filepath)
 
 # Source
 Source = Source(env, 'Source', data, model, Monitor)
@@ -81,7 +81,8 @@ print('#' * 80)
 print("Data Post-Processing")
 print('#' * 80)
 
-event_tracer = pd.read_csv(filename)
+event_tracer = Monitor.save_event_tracer()
+
 # 가동률
 print('#' * 80)
 for i in range(len(process_list)):

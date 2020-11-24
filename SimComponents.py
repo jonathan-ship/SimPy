@@ -247,12 +247,30 @@ class Routing(object):
 
 
 class Monitor(object):
-    def __init__(self, filename):
-        self.filename = filename
-        with open(self.filename, 'w', encoding='utf-8-sig') as f:
-            f.write('Time,Event,Part,Process,SubProcess')
+    def __init__(self, filepath):
+        self.filepath = filepath  ## Event tracer 저장 경로
+
+        self.time=[]
+        self.event=[]
+        self.part_id=[]
+        self.process=[]
+        self.subprocess=[]
 
     def record(self, time, process, subprocess, part_id=None, event=None):
-        with open(self.filename, 'a') as f:
-            f.write('\n{0},{1},{2},{3},{4}'.format(time, event, part_id, process, subprocess))
+        self.time.append(time)
+        self.event.append(event)
+        self.part_id.append(part_id)
+        self.process.append(process)
+        self.subprocess.append(subprocess)
+
+    def save_event_tracer(self):
+        event_tracer = pd.DataFrame(columns=['Time', 'Event', 'Part', 'Process', 'SubProcess'])
+        event_tracer['Time'] = self.time
+        event_tracer['Event'] = self.event
+        event_tracer['Part'] = self.part_id
+        event_tracer['Process'] = self.process
+        event_tracer['SubProcess'] = self.subprocess
+        event_tracer.to_csv(self.filepath)
+
+        return event_tracer
 

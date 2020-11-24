@@ -51,8 +51,8 @@ model = {}  # process_dict
 process_time = {"Process1": [service_time_1, service_time_2, service_time_3]}  # server에 할당할 process time
 
 # Monitoring
-filename = './result/event_log_MM3.csv'
-Monitor = Monitor(filename)
+filepath = './result/event_log_MM3.csv'
+Monitor = Monitor(filepath)
 
 Source = Source(env, 'Source', data, model, Monitor)
 
@@ -83,8 +83,9 @@ print("Post-Processing")
 print("M/M/3 Case 1")
 print("IAT: uniform(30, 60), Service Time: exponential(30), exponential(50), exponential(70)")
 
-event_tracer = pd.read_csv(filename)
+event_tracer = Monitor.save_event_tracer()
 run_time = model['Sink'].last_arrival
+
 # 가동률
 print('#' * 80)
 # Process

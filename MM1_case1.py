@@ -50,8 +50,8 @@ model = {}  # process_dict
 process_time = {"Process1": [service_time]}  # server에 할당할 process time
 
 # Monitoring
-filename = './result/event_log_MM1.csv'
-Monitor = Monitor(filename)
+filepath = './result/event_log_MM1.csv'
+Monitor = Monitor(filepath)
 
 Source = Source(env, 'Source', data, model, Monitor)
 
@@ -81,7 +81,8 @@ print('#' * 80)
 print("Post-Processing")
 print("M/M/1 Case 1")
 print("IAT: uniform(30, 60), Service Time: exponential(50)")
-event_tracer = pd.read_csv(filename)
+
+event_tracer = Monitor.save_event_tracer()
 
 # 가동률
 print('#' * 80)
