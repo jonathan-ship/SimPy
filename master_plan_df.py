@@ -101,7 +101,7 @@ for i in range(len(process_list) + 1):
         model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
 # Run it
-df.to_excel('./master_plan_전처리.xlsx')
+df.to_excel('./MCM_ACTIVITY_revision.xlsx')
 start = time.time()  # 시뮬레이션 시작 시각
 env.run()
 finish = time.time()  # 시뮬레이션 종료 시각
