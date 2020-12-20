@@ -9,7 +9,7 @@ from SimComponents import Source, Sink, Process, Monitor
 start_0 = time.time()
 
 # DATA INPUT
-data_all = pd.read_csv('./data/block_transfer.csv', dtype={'PROJ_NO': object})
+data_all = pd.read_csv('../data/block_transfer.csv', dtype={'PROJ_NO': object})
 
 # DATA PRE-PROCESSING
 data = pd.DataFrame()
@@ -64,7 +64,7 @@ m_assy = 2
 m_oft = 2
 m_pnt = 2
 server_num = [m_assy, m_oft, m_pnt]
-filepath = './result/event_log_block_movement_actual.csv'
+filepath = '../result/event_log_block_movement_actual.csv'
 Monitor = Monitor(filepath)
 
 # Source

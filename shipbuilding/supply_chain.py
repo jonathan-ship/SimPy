@@ -55,7 +55,7 @@ process_list += list(data.drop_duplicates(['process2'])['process2'])
 model = {}
 server_num = [1 for _ in range(len(process_list))]
 
-filepath = './result/event_log_supply_chain.csv'
+filepath = '../result/event_log_supply_chain.csv'
 Monitor = Monitor(filepath)
 
 Source = Source(env, 'Source', df, model, Monitor)

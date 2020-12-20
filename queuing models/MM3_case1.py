@@ -51,7 +51,7 @@ model = {}  # process_dict
 process_time = {"Process1": [service_time_1, service_time_2, service_time_3]}  # server에 할당할 process time
 
 # Monitoring
-filepath = './result/event_log_MM3.csv'
+filepath = '../result/event_log_MM3.csv'
 Monitor = Monitor(filepath)
 
 Source = Source(env, 'Source', data, model, Monitor)
