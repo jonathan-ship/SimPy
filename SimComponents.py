@@ -5,7 +5,7 @@ from collections import deque
 import pandas as pd
 import numpy as np
 
-save_path = './result'
+save_path = '../result'
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 

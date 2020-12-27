@@ -10,7 +10,7 @@ from SimComponents import Source, Sink, Process, Monitor
 start_0 = time.time()
 
 # DATA INPUT
-data_all = pd.read_excel('./data/spool_data_for_simulation.xlsx')
+data_all = pd.read_excel('../data/spool_data_for_simulation.xlsx')
 data_all = data_all[['NO_SPOOL', '제작협력사', '도장협력사', "Plan_makingLT", "Actual_makingLT", "Predicted_makingLT",
                  "Plan_paintingLT", "Actual_paintingLT", "Predicted_paintingLT"]]
 

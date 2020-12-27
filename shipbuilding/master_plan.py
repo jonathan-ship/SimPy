@@ -12,7 +12,7 @@ start_run = time.time()
 
 ## Pre-Processing
 # DATA INPUT
-data_all = pd.read_excel('./data/MCM_ACTIVITY.xls')
+data_all = pd.read_excel('../data/MCM_ACTIVITY.xls')
 data = data_all[['PROJECTNO', 'ACTIVITYCODE', 'LOCATIONCODE', 'PLANSTARTDATE', 'PLANFINISHDATE', 'PLANDURATION']]
 
 # DATA PRE-PROCESSING
@@ -87,7 +87,7 @@ model = {}
 server_num = [1 for _ in range(len(process_list))]
 
 # Monitoring
-filepath = './result/event_log_master_plan.csv'
+filepath = '../result/event_log_master_plan.csv'
 Monitor = Monitor(filepath)
 
 # Source, Sink modeling
@@ -101,7 +101,7 @@ for i in range(len(process_list) + 1):
         model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
 # Run it
-df.to_excel('./MCM_ACTIVITY_revision.xlsx')
+df.to_excel('../data/MCM_ACTIVITY_revision.xlsx')
 start = time.time()  # 시뮬레이션 시작 시각
 env.run()
 finish = time.time()  # 시뮬레이션 종료 시각

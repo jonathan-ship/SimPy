@@ -53,7 +53,7 @@ if __name__ == "__main__":
     preprocessing_start = time.time()
 
     # import raw data
-    raw_data = pd.read_excel("./data/master_planning.xlsx", engine="openpyxl")
+    raw_data = pd.read_excel("../data/master_planning.xlsx", engine="openpyxl")
 
     # select the columns containing essesntial information to run simulation
     data_selected = raw_data[["PROJECTNO", "LOCATIONCODE", "ACTIVITYCODE", "PLANSTARTDATE", "PLANDURATION"]]
