@@ -56,7 +56,7 @@ m_assy = 2
 m_oft = 2
 m_pnt = 2
 server_num = [m_assy, m_oft, m_pnt]
-filepath = './result/event_log_block_movement_fitting.csv'
+filepath = '../result/event_log_block_movement_fitting.csv'
 Monitor = Monitor(filepath)
 
 # Source
