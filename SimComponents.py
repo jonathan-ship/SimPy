@@ -116,7 +116,7 @@ class Source(object):
 
 
 class Process(object):
-    def __init__(self, env, name, server_num, process_dict, monitor, resource, MTTF=None, MTTR=None, process_time=None, qlimit=float('inf'), routing_logic="cyclic", priority=None):
+    def __init__(self, env, name, server_num, process_dict, monitor, resource=None, MTTF=None, MTTR=None, process_time=None, qlimit=float('inf'), routing_logic="cyclic", priority_list=None):
         self.env = env
         self.name = name
         self.server_process_time = process_time[self.name] if process_time is not None else [None for _ in range(server_num)]  ## [5, 10, 15]
@@ -127,6 +127,7 @@ class Process(object):
         self.server = [SubProcess(env, self.name, '{0}_{1}'.format(self.name, i), process_dict, self.server_process_time[i], self.Monitor, MTTF=MTTF, MTTR=MTTR) for i in range(server_num)]
         self.qlimit = qlimit
         self.routing_logic = routing_logic
+        self.priority_list = priority_list
 
         self.tp_store = simpy.FilterStore(env)  # transporter가 입고 - 출고 될 store
         self.parts_sent = 0
@@ -138,6 +139,9 @@ class Process(object):
     def put(self, part):
         self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process_entered")
         # Routing
+        if self.priority_list is not None:
+            return
+
         routing = Routing(self.server)
         if self.routing_logic == "least_utilized":  # routing logic = least utilized
             self.server_idx = routing.least_utilized()
@@ -189,6 +193,7 @@ class SubProcess(object):
     def run(self):
         while True:
             # queue로부터 part 가져오기
+            self.broken = True
             self.part = yield self.sub_queue.get()
             start_time = self.env.now
             self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="queue_released")
@@ -202,6 +207,7 @@ class SubProcess(object):
 
             while proc_time:
                 try:
+                    self.broken = False
                     # record: work_start
                     self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="work_start")
 
@@ -212,6 +218,8 @@ class SubProcess(object):
                     # record: work_finish
                     self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="work_finish")
                     self.total_working_time += self.env.now - self.working_start
+
+                    self.broken = True
 
                     step = 1
                     while not self.part.data[(self.part.step + step, 'process_time')]:
@@ -239,8 +247,11 @@ class SubProcess(object):
                             yield self.process_dict[next_process].waiting[self.part.id]
                             self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="delay_finish")
 
-                        yield self.env.process(self.process_dict[self.process_name].Resource.request_tp(self.process_name, next_process, 0, 0, 100,
+                        if self.process_dict[self.process_name].Resource is not None:
+                            yield self.env.process(self.process_dict[self.process_name].Resource.request_tp(self.process_name, next_process, 0, 0, 100,
                                                                                  part=self.part))
+                        else:
+                            self.process_dict[next_process].put(self.part)
                         self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id,
                                             event="part_transferred")
 
@@ -248,7 +259,6 @@ class SubProcess(object):
                         self.process_dict[next_process].put(self.part)
                         self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id,
                                             event="part_transferred")
-
 
                     self.process_dict[self.process_name].parts_sent += 1
 
