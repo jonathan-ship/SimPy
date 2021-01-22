@@ -1,16 +1,18 @@
 import os
 import pandas as pd
 import scipy.stats as st
+import numpy as np
 import simpy
 import time
+import functools
 
-from SimComponents import Source, Sink, Process, Monitor, Resource
+from SimComponents_rev import Source, Sink, Process, Monitor, Part
 
 # 코드 실행 시작 시각
 start_run = time.time()
 
 # csv 파일 pandas 객체 생성 // 000, 003, fin 중 선택 가능
-data_all = pd.read_csv('../data/PBS_assy_sequence_gen_fin.csv')
+data_all = pd.read_csv('./data/PBS_assy_sequence_gen_fin.csv')
 data = data_all[["product", "plate_weld", "saw_front", "turn_over", "saw_back", "longi_attach", "longi_weld", "sub_assy"]]
 
 # process list
@@ -27,6 +29,7 @@ df = pd.DataFrame(columns=columns, index=part)
 IAT = st.expon.rvs(loc=3, scale=1, size=len(data))
 start_time = IAT.cumsum()
 
+parts = []
 # process + Sink --> len(process_list) + 1
 for i in range(len(process_list) + 1):
     # Sink 모델링
@@ -40,15 +43,17 @@ for i in range(len(process_list) + 1):
         df[(i, 'process_time')] = list(data[process_list[i]])
         df[(i, 'process')] = process_list[i]
 
-tp_info = {}
-wf_info = {}
-
-tp_info["TP_1"] = {"capa":100, "v_loaded":0.5, "v_unloaded":1.0}
-tp_info["TP_2"] = {"capa":100, "v_loaded":0.3, "v_unloaded":0.8}
-tp_info["TP_3"] = {"capa":100, "v_loaded":0.2, "v_unloaded":0.7}
-
-wf_info["WF_1"] = {"skill":1.0}
-wf_info["WF_2"] = {"skill":1.2}
+for i in range(len(df)):
+    parts.append(Part(df.index[i], df.iloc[i]))
+# tp_info = {}
+# wf_info = {}
+#
+# tp_info["TP_1"] = {"capa":100, "v_loaded":0.5, "v_unloaded":1.0}
+# tp_info["TP_2"] = {"capa":100, "v_loaded":0.3, "v_unloaded":0.8}
+# tp_info["TP_3"] = {"capa":100, "v_loaded":0.2, "v_unloaded":0.7}
+#
+# wf_info["WF_1"] = {"skill":1.0}
+# wf_info["WF_2"] = {"skill":1.2}
 
 # Modeling
 env = simpy.Environment()
@@ -56,24 +61,25 @@ env = simpy.Environment()
 ##
 model = {}
 server_num = [1 for _ in range(len(process_list))]
-filepath = '../result/event_log_PBS_fin_tp.csv'
+filepath = './result/event_log_PBS_fin_tp.csv'
 Monitor = Monitor(filepath)
-Resource = Resource(env, tp_info, wf_info, model, Monitor)
+# Resource = Resource(env, tp_info, wf_info, model, Monitor)
+# MTTF = functools.partial(np.random.exponential, 5)
+# MTTR = functools.partial(np.random.exponential, 3)
 
-# Modeling
 # Source
-Source = Source(env, 'Source', df, model, Monitor)
+Source = Source(env, parts, model, Monitor)
 
 # process modeling
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', Monitor)
+        model['Sink'] = Sink(env, Monitor)
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, Resource)
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
 # Simulation
 start = time.time()  # 시뮬레이션 실행 시작 시각
-env.run()
+env.run(until = 10000)
 finish = time.time()  # 시뮬레이션 실행 종료 시각
 
 print('#' * 80)
@@ -86,69 +92,7 @@ print("total time : ", finish - start_run)
 print("simulation execution time :", finish - start)
 
 print('#' * 80)
-
-from PostProcessing import *
+print("Makespan : ", model['Sink'].last_arrival)
 
 event_tracer = Monitor.save_event_tracer()
-
-print("Total Flow time : ", model['Sink'].last_arrival)
-
-# print("Average Lead time of each part : ", cal_leadtime(event_tracer, finish_time=model['Sink'].last_arrival + 1))
-# print("Average total processing time : ", np.mean(total_processing_time))
-#
-# idle_time_list = []
-#
-# for process in process_list:
-#     _, idle_time, _ = cal_utilization(event_tracer, process, "Process", finish_time=model['Sink'].last_arrival+0.01)
-#     idle_time_list.append(idle_time)
-#
-# print("Total Idle time: ", np.sum(idle_time_list))
-# print("Average of Idle time of each Process : ", np.mean(idle_time_list))
-#
-# ###
-# delay_start = event_tracer["Time"][(event_tracer["Process"] == 'plate_weld') & (event_tracer["Event"] == "delay_start")]
-# delay_finish = event_tracer["Time"][(event_tracer["Process"] == 'plate_weld') & (event_tracer["Event"] == "delay_finish")]
-#
-# delay_start.reset_index(drop=True, inplace=True)
-# delay_finish.reset_index(drop=True, inplace=True)
-#
-#
-# delay_time = np.sum(delay_finish) - np.sum(delay_start)
-
-# print("delay_time of first Process: ", delay_time)
-#
-# gantt(event_tracer, process_list)
-#
-# print("*"*10, "Utilization/Idle Time/Working Time", "*"*10)
-# for process in process_list:
-#     print("Utilization of", process, ":", cal_utilization(event_tracer, process, "Process", num=1, start_time = 0.0, finish_time = model['Sink'].last_arrival, display=False, save=False, filepath='./result'))
-#     cal_utilization(event_tracer, process, "Process", num=1, start_time = 0.0, finish_time = model['Sink'].last_arrival, step = 100, display=True, save=True, filepath='./result/utilization')
-#
-# print("*"*10, "Throughput", "*"*10)
-# for process in process_list:
-#     print("throughput of", process, ":", cal_throughput(event_tracer, process, "Process", start_time = 0.0, finish_time=model['Sink'].last_arrival, display=False, save=False, filepath='./result'))
-#     cal_throughput(event_tracer, process, "Process", start_time=0.0, finish_time=model['Sink'].last_arrival, step=100, display=True, save=True, filepath='./result/throughput')
-#
-# print("*"*10, "WIP", "*"*10)
-# for process in process_list:
-#     print("WIP of", process, ":", cal_wip(event_tracer, process, "Process", mode="m", start_time=0.0, finish_time=model['Sink'].last_arrival,display=False, save=False, filepath='./result'))
-#     cal_wip(event_tracer, process, "Process", mode="m", start_time=0.0, finish_time=model['Sink'].last_arrival,step=100, display=True, save=True, filepath='./result/wip')
-#
-# utilization_list = []
-# throughput_list = []
-# wip_list = []
-#
-# for process in process_list:
-#     temp = list(cal_utilization(event_tracer, process, "Process", num=1, start_time=0.0, finish_time=model['Sink'].last_arrival, display=False, save=False, filepath='./result'))
-#     utilization_list.append(temp[0])
-#     throughput_list.append(cal_throughput(event_tracer, process, "Process", start_time = 0.0, finish_time=model['Sink'].last_arrival, display=False, save=False, filepath='./result'))
-#     wip_list.append(cal_wip(event_tracer, process, "Process", mode="m", start_time=0.0, finish_time=model['Sink'].last_arrival,display=False, save=False, filepath='./result'))
-#
-# print(utilization_list)
-# print(throughput_list)
-# print(wip_list)
-#
-# graph(process_list,utilization_list,title="Utilization", display=True, save=True, filepath='./result')
-# graph(process_list,throughput_list,title="Throughput", display=True, save=True, filepath='./result')
-# graph(process_list,wip_list,title="WIP", display=True, save=True, filepath='./result')
 
