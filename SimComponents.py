@@ -1,7 +1,7 @@
 import simpy
 import random
 import os
-from collections import namedtuple
+from collections import deque, namedtuple
 import pandas as pd
 import numpy as np
 
@@ -116,7 +116,7 @@ class Source(object):
 
 
 class Process(object):
-    def __init__(self, env, name, server_num, process_dict, monitor, resource, MTTF=None, MTTR=None, process_time=None, qlimit=float('inf'), routing_logic="cyclic", priority_list=None):
+    def __init__(self, env, name, server_num, process_dict, monitor, resource, MTTF=None, MTTR=None, process_time=None, qlimit=float('inf'), routing_logic="cyclic", priority=None):
         self.env = env
         self.name = name
         self.server_process_time = process_time[self.name] if process_time is not None else [None for _ in range(server_num)]  ## [5, 10, 15]
@@ -124,7 +124,6 @@ class Process(object):
         self.Monitor = monitor
         self.Resource = resource
         self.process_dict = process_dict
-        self.priority_list = priority_list
         self.server = [SubProcess(env, self.name, '{0}_{1}'.format(self.name, i), process_dict, self.server_process_time[i], self.Monitor, MTTF=MTTF, MTTR=MTTR) for i in range(server_num)]
         self.qlimit = qlimit
         self.routing_logic = routing_logic
@@ -139,17 +138,11 @@ class Process(object):
     def put(self, part):
         self.Monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process_entered")
         # Routing
-        # if self.priority_list is not None:
-        #     min_priority = np.min(self.priority_list)
-        #     idx_min_list = np.argwhere(utilization_list == np.min(utilization_list))
-        #     idx_min_list = idx_min_list.flatten().tolist()
-        server = self.server
-        routing = Routing(server)
+        routing = Routing(self.server)
         if self.routing_logic == "least_utilized":  # routing logic = least utilized
             self.server_idx = routing.least_utilized()
         elif self.routing_logic == "first_possible":  # routing_logic = first possible
             self.server_idx = routing.first_possible()
-            print(0)
         else:  # routing logic = cyclic
             self.server_idx = 0 if (self.parts_sent == 0) or (self.server_idx == self.server_num-1) else self.server_idx + 1
 
@@ -196,8 +189,8 @@ class SubProcess(object):
     def run(self):
         while True:
             # queue로부터 part 가져오기
-            self.broken = True
             self.part = yield self.sub_queue.get()
+            start_time = self.env.now
             self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="queue_released")
             self.flag = True
 
@@ -209,7 +202,6 @@ class SubProcess(object):
 
             while proc_time:
                 try:
-                    self.broken = False
                     # record: work_start
                     self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="work_start")
 
@@ -220,8 +212,6 @@ class SubProcess(object):
                     # record: work_finish
                     self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="work_finish")
                     self.total_working_time += self.env.now - self.working_start
-
-                    self.broken = True
 
                     step = 1
                     while not self.part.data[(self.part.step + step, 'process_time')]:
@@ -245,6 +235,7 @@ class SubProcess(object):
                             self.process_dict[next_process].waiting[self.part.id] = self.env.event()
                             self.process_dict[next_process].delay_part_id.append(self.part.id)
                             self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="delay_start")
+
                             yield self.process_dict[next_process].waiting[self.part.id]
                             self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id, event="delay_finish")
 
@@ -265,27 +256,22 @@ class SubProcess(object):
 
                     self.part.step += step
 
-                    # delay finish at pre-process
+                    # delay finish
                     server, queue = self.process_dict[self.process_name].get_num_of_part()
                     if (server + queue < self.process_dict[self.process_name].qlimit) and (len(self.process_dict[self.process_name].waiting) > 0):
                         delay_part = self.process_dict[self.process_name].delay_part_id.pop(0)
                         self.process_dict[self.process_name].waiting.pop(delay_part).succeed()
 
                     self.part = None
-                    self.total_time += self.env.now - self.working_start
+                    self.total_time += self.env.now - start_time
 
-                    proc_time = 0
+                    proc_time = 0.0
 
                 except simpy.Interrupt:
                     self.broken = True
-                    proc_time -= self.env.now - self.working_start
-
-                    self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id,
-                                        event="broken")
+                    proc_time -= self.env.now - start_time
                     yield self.env.timeout(self.MTTR())
                     self.broken = False
-                    self.Monitor.record(self.env.now, self.process_name, self.name, part_id=self.part.id,
-                                        event="solved")
 
     def break_machine(self, MTTF):
         while True:
