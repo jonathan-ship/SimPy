@@ -64,8 +64,18 @@ server_num = [1 for _ in range(len(process_list))]
 filepath = './result/event_log_PBS_fin_tp.csv'
 Monitor = Monitor(filepath)
 # Resource = Resource(env, tp_info, wf_info, model, Monitor)
-# MTTF = functools.partial(np.random.exponential, 5)
-# MTTR = functools.partial(np.random.exponential, 3)
+each_MTTF = functools.partial(np.random.exponential, 5)
+each_MTTR = functools.partial(np.random.exponential, 3)
+MTTR = {}
+MTTF = {}
+for process in process_list:
+    if process == 'saw_front':
+        MTTR[process] = [each_MTTR]
+        MTTF[process] = [each_MTTF]
+    else:
+        MTTR[process] = [None]
+        MTTF[process] = [None]
+
 
 # Source
 Source = Source(env, parts, model, Monitor)
@@ -75,11 +85,11 @@ for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, Monitor)
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, MTTR=MTTR, MTTF=MTTF)
 
 # Simulation
 start = time.time()  # 시뮬레이션 실행 시작 시각
-env.run(until = 10000)
+env.run(until=1000)
 finish = time.time()  # 시뮬레이션 실행 종료 시각
 
 print('#' * 80)
