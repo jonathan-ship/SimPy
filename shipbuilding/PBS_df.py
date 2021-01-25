@@ -12,7 +12,7 @@ from SimComponents_rev import Source, Sink, Process, Monitor, Part
 start_run = time.time()
 
 # csv 파일 pandas 객체 생성 // 000, 003, fin 중 선택 가능
-data_all = pd.read_csv('./data/PBS_assy_sequence_gen_fin.csv')
+data_all = pd.read_csv('../data/PBS_assy_sequence_gen_fin.csv')
 data = data_all[["product", "plate_weld", "saw_front", "turn_over", "saw_back", "longi_attach", "longi_weld", "sub_assy"]]
 
 # process list

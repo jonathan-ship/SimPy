@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from collections import OrderedDict
 
-save_path = './result'
+save_path = '../result'
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
@@ -43,11 +43,8 @@ class Source(object):
 
             # next process
             next_process = part.data[(part.step, 'process')]
-
-            self.model[next_process].buffer_to_machine.put(part)
-            # record: part_transferred
             self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="part_transferred")
-            ## self.model[next_process].put(part)
+            self.model[next_process].buffer_to_machine.put(part)
 
             if len(self.parts) == 0:
                 print("all parts are sent at : ", self.env.now)
@@ -56,7 +53,9 @@ class Source(object):
 
 class Process(object):
     def __init__(self, env, name, machine_num, model, monitor, process_time=None, capacity=float('inf'),
-                 routing_logic='cyclic', priority=None, capa_to_machine=float('inf'), capa_to_process=float('inf')):
+                 routing_logic='cyclic', priority=None, capa_to_machine=float('inf'), capa_to_process=float('inf'),
+                 MTTR=None, MTTF=None):
+        # input data
         self.env = env
         self.name = name
         self.model = model
@@ -66,23 +65,28 @@ class Process(object):
         self.machine_num = machine_num
         self.routing_logic = routing_logic
         self.priority = priority[self.name] if priority is not None else [1 for _ in range(machine_num)]
+        self.MTTR = MTTR[self.name] if MTTR is not None else [None for _ in range(machine_num)]
+        self.MTTF = MTTF[self.name] if MTTF is not None else [None for _ in range(machine_num)]
 
+        # variable defined in class
         self.parts_sent = 0
         self.machine_idx = 0
         self.len_of_server = []
         self.waiting_machine = OrderedDict()
-        self.waiting_preprocess = OrderedDict()
+        self.waiting_pre_process = OrderedDict()
 
+        # buffer and machine
         self.buffer_to_machine = simpy.Store(env, capacity=capa_to_machine)
         self.buffer_to_process = simpy.Store(env, capacity=capa_to_process)
         self.machine = [Machine(env, '{0}_{1}'.format(self.name, i + 1), process_time=self.process_time[i],
                                 priority=self.priority[i], out=self.buffer_to_process, waiting=self.waiting_machine,
-                                monitor=monitor) for i in range(self.machine_num)]
+                                monitor=monitor, MTTF=self.MTTF[i], MTTR=self.MTTR[i]) for i in range(self.machine_num)]
 
-        env.process(self._to_machine())
-        env.process(self._to_process())
+        # get run functions in class
+        env.process(self.to_machine())
+        env.process(self.to_process())
 
-    def _to_machine(self):
+    def to_machine(self):
         routing = Routing(self.machine, priority=self.priority)
         while True:
             part = yield self.buffer_to_machine.get()
@@ -98,10 +102,10 @@ class Process(object):
             self.machine[self.machine_idx].machine.put(part)
 
             # finish delaying of pre-process
-            if (len(self.buffer_to_machine.items) < self.buffer_to_machine.capacity) and (len(self.waiting_preprocess) > 0):
-                self.waiting_preprocess.popitem(last=False)[1].succeed()  # delay = (part_id, event)
+            if (len(self.buffer_to_machine.items) < self.buffer_to_machine.capacity) and (len(self.waiting_pre_process) > 0):
+                self.waiting_pre_process.popitem(last=False)[1].succeed()  # delay = (part_id, event)
 
-    def _to_process(self):
+    def to_process(self):
         while True:
             part = yield self.buffer_to_process.get()
 
@@ -137,7 +141,8 @@ class Process(object):
 
 
 class Machine(object):
-    def __init__(self, env, name, process_time, priority, out, waiting, monitor):
+    def __init__(self, env, name, process_time, priority, out, waiting, monitor, MTTF, MTTR):
+        # input data
         self.env = env
         self.name = name
         self.process_time = process_time
@@ -145,45 +150,82 @@ class Machine(object):
         self.out = out
         self.waiting = waiting
         self.monitor = monitor
+        self.MTTR = MTTR if (type(MTTR) == float) or (MTTR is None) else MTTR()
+        self.MTTF = MTTF if (type(MTTF) == float) or (MTTF is None) else MTTF()
 
-        env.process(self.work())
+        # variable defined in class
         self.machine = simpy.Store(env, capacity=1)
         self.working_start = 0.0
         self.total_time = 0.0
         self.total_working_time = 0.0
-        self.working = False
+        self.working = False  # whether machine've worked(True) or idled(False)
+        self.broken = False  # whether machine is broken or not
+
+        # get run functions in class
+        self.action = env.process(self.work())
+        if self.MTTF is not None:
+            env.process(self.break_machine(self.MTTF))
 
     def work(self):
         while True:
+            self.broken = True
             part = yield self.machine.get()
             self.working = True
             process_name = self.name[:-2]
-            self.monitor.record(self.env.now, process_name, self.name, part_id=part.id, event="work_start")
 
             # process_time
-            if self.process_time == None:  # part에 process_time이 미리 주어지는 경우
+            if self.process_time is None:  # part에 process_time이 미리 주어지는 경우
                 proc_time = part.data[(part.step, "process_time")]
             else:  # service time이 정해진 경우 --> 1) fixed time / 2) Stochastic-time
                 proc_time = self.process_time if type(self.process_time) == float else self.process_time()
 
-            # working
-            self.working_start = self.env.now
-            yield self.env.timeout(proc_time)
-            self.total_working_time += self.env.now - self.working_start
-            self.monitor.record(self.env.now, process_name, self.name, part_id=part.id, event="work_finish")
+            self.broken = False
+            while proc_time:
+                try:
+                    ## working start
+                    self.monitor.record(self.env.now, process_name, self.name, part_id=part.id, event="work_start")
+                    self.working_start = self.env.now
+                    yield self.env.timeout(proc_time)
+
+                    ## working finish
+                    self.monitor.record(self.env.now, process_name, self.name, part_id=part.id, event="work_finish")
+                    self.total_working_time += self.env.now - self.working_start
+
+                    proc_time = 0.0
+
+                except simpy.Interrupt:
+                    self.monitor.record(self.env.now, process_name, self.name, part_id=part.id,
+                                        event="machine_broken")
+                    self.broken = True
+                    proc_time -= self.env.now - self.working_start
+                    yield self.env.timeout(self.MTTR)
+                    self.monitor.record(self.env.now, process_name, self.name, part_id=part.id,
+                                        event="machine_rerunning")
+
 
             # start delaying at machine cause buffer_to_process is full
             if len(self.out.items) == self.out.capacity:
                 self.waiting[part.id] = self.env.event()
-                self.monitor.record(self.env.now, process_name, self.name, part_id=part.id, event="delay_start_machine")
+                self.monitor.record(self.env.now, process_name, self.name, part_id=part.id,
+                                    event="delay_start_machine")
                 yield self.waiting[part.id]  # start delaying
-                self.monitor.record(self.env.now, process_name, self.name, part_id=part.id, event="delay_finish_machine")
+                self.monitor.record(self.env.now, process_name, self.name, part_id=part.id,
+                                    event="delay_finish_machine")
 
             # transfer to '_to_process' function
             self.out.put(part)
-            self.monitor.record(self.env.now, process_name, self.name, part_id=part.id, event="part_transferred")
+            self.monitor.record(self.env.now, process_name, self.name, part_id=part.id,
+                                event="part_transferred")
             self.working = False
             self.total_time += self.env.now - self.working_start
+            self.broken = False
+
+    def break_machine(self, mttf):
+        while True:
+            yield self.env.timeout(mttf)
+            if not self.broken:
+                self.action.interrupt()
+
 
 
 class Sink(object):
