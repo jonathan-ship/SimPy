@@ -61,7 +61,7 @@ env = simpy.Environment()
 ##
 model = {}
 server_num = [1 for _ in range(len(process_list))]
-filepath = './result/event_log_PBS_fin_tp.csv'
+filepath = '../result/event_log_PBS_fin_tp.csv'
 Monitor = Monitor(filepath)
 # Resource = Resource(env, tp_info, wf_info, model, Monitor)
 each_MTTF = functools.partial(np.random.exponential, 5)
