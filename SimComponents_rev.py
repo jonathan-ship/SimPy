@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from collections import OrderedDict
 
-save_path = '../result'
+save_path = './result'
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
@@ -29,6 +29,7 @@ class Source(object):
         self.monitor = monitor
 
         self.action = env.process(self.run())
+        self.parts_len = len(self.parts[:])
 
     def run(self):
         while True:
@@ -48,6 +49,7 @@ class Source(object):
 
             if len(self.parts) == 0:
                 print("all parts are sent at : ", self.env.now)
+
                 break
 
 
@@ -221,7 +223,7 @@ class Machine(object):
             self.broken = False
 
     def break_machine(self, mttf):
-        while True:
+        while self.monitor.event.count('part_created') < self.monitor.event.count('completed'):
             yield self.env.timeout(mttf)
             if not self.broken:
                 self.action.interrupt()
@@ -295,5 +297,3 @@ class Routing(object):
                 else:
                     i += 1  # 다음 priority에 대하여 따져봄
         return idx
-
-
