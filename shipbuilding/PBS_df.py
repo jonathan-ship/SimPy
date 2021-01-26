@@ -89,7 +89,7 @@ for i in range(len(process_list) + 1):
 
 # Simulation
 start = time.time()  # 시뮬레이션 실행 시작 시각
-env.run(until=1000)
+env.run()
 finish = time.time()  # 시뮬레이션 실행 종료 시각
 
 print('#' * 80)
