@@ -89,5 +89,6 @@ print("simulation execution time :", finish - start)
 
 print('#' * 80)
 print("Makespan : ", model['Sink'].last_arrival)
+print("The entire number of blocks in Simulation : ", model['Sink'].parts_sent)
 
 event_tracer = Monitor.save_event_tracer()

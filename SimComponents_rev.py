@@ -146,12 +146,12 @@ class Process(object):
     def to_machine(self):
         routing = Routing(self.machine, priority=self.priority)
         while True:
-            print('delaying start at', self.env.now, 'in ', self.name)
+            # print('delaying start at', self.env.now, 'in ', self.name)
             if self.delay_time is not None:
                 delaying_time = self.delay_time if type(self.delay_time) == float else self.delay_time()
                 yield self.env.timeout(delaying_time)
             part = yield self.buffer_to_machine.get()
-            print('{0} gets in in_buffer of {1} at {2}'.format(part.id, self.name, self.env.now))
+            # print('{0} gets in in_buffer of {1} at {2}'.format(part.id, self.name, self.env.now))
             self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process_entered")
             ## Rouring logic 추가 할 예정
             if self.routing_logic == 'priority':
@@ -162,7 +162,7 @@ class Process(object):
 
             self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="routing_ended")
             self.machine[self.machine_idx].machine.put(part)
-            print('{0} go to {1}_{2} at {3}'.format(part.id, self.name , self.machine_idx, self.env.now))
+            # print('{0} go to {1}_{2} at {3}'.format(part.id, self.name , self.machine_idx, self.env.now))
 
             # finish delaying of pre-process
             if (len(self.buffer_to_machine.items) < self.buffer_to_machine.capacity) and (len(self.waiting_pre_process) > 0):
@@ -171,7 +171,7 @@ class Process(object):
     def to_process(self):
         while True:
             part = yield self.buffer_to_process.get()
-            print('{0} gets in out_buffer of {1} at {2}'.format(part.id, self.name, self.env.now))
+            # print('{0} gets in out_buffer of {1} at {2}'.format(part.id, self.name, self.env.now))
             # next process
             step = 1
             while not part.data[(part.step + step, 'process_time')]:
@@ -198,7 +198,7 @@ class Process(object):
                 self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="part_transferred")
 
             part.step += step
-            print('{0} gets off to {1} at {2}'.format(part.id, next_process_name, self.env.now))
+            # print('{0} gets off to {1} at {2}'.format(part.id, next_process_name, self.env.now))
 
             if (len(self.buffer_to_process.items) < self.buffer_to_process.capacity) and (len(self.waiting_machine) > 0):
                 self.waiting_machine.popitem(last=False)[1].succeed()  # delay = (part_id, event)
@@ -264,14 +264,14 @@ class Machine(object):
                     self.broken = True
                     self.monitor.record(self.env.now, process_name, self.name, part_id=part.id,
                                         event="machine_broken")
-                    print('{0} is broken at '.format(self.name), self.env.now)
+                    # print('{0} is broken at '.format(self.name), self.env.now)
                     proc_time -= self.env.now - self.working_start
                     if self.MTTR is not None:
                         repair_time = self.MTTR if type(self.MTTR) == float else self.MTTR()
                         yield self.env.timeout(repair_time)
                     self.monitor.record(self.env.now, process_name, self.name, part_id=part.id,
                                         event="machine_rerunning")
-                    print(self.name, 'is solved at ', self.env.now)
+                    # print(self.name, 'is solved at ', self.env.now)
                     self.broken = False
 
             self.working = False
@@ -288,7 +288,7 @@ class Machine(object):
             self.out.put(part)
             self.monitor.record(self.env.now, process_name, self.name, part_id=part.id,
                                 event="part_transferred")
-            print('{0} gets off to {1} at {2}'.format(part.id, self.name, self.env.now))
+            # print('{0} gets off to {1} at {2}'.format(part.id, self.name, self.env.now))
             self.total_time += self.env.now - self.working_start
 
     def break_machine(self, mttf):
@@ -312,7 +312,7 @@ class Sink(object):
         self.last_arrival = 0.0
 
     def put(self, part):
-        print('{0} gets in Sink at {1}'.format(part.id, self.env.now))
+        # print('{0} gets in Sink at {1}'.format(part.id, self.env.now))
         self.parts_rec += 1
         self.last_arrival = self.env.now
         self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="completed")
