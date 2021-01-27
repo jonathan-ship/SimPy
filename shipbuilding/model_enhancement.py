@@ -9,7 +9,7 @@ from SimComponents_rev import Part, Sink, Process, Source, Monitor
 start_run = time.time()
 env = simpy.Environment()
 
-blocks = 1000
+blocks = 22000
 process_list = ['Cutting', 'Bending', 'LineHeating']
 part = [i+1 for i in range(blocks)]
 columns = pd.MultiIndex.from_product([[i for i in range(len(process_list)+1)], ['start_time', 'process_time', 'process']])
@@ -89,6 +89,6 @@ print("simulation execution time :", finish - start)
 
 print('#' * 80)
 print("Makespan : ", model['Sink'].last_arrival)
-print("The entire number of blocks in Simulation : ", model['Sink'].parts_sent)
+print("The entire number of blocks in Simulation : ", model['Sink'].parts_rec)
 
 event_tracer = Monitor.save_event_tracer()
