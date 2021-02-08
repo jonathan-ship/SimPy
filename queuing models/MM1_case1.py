@@ -1,3 +1,4 @@
+
 '''
 M/M/1 Case 1
 Run time: 1000s
