@@ -3,64 +3,82 @@ import os
 import random
 import pandas as pd
 import numpy as np
+import networkx as nx
 from collections import OrderedDict, namedtuple
 
 save_path = '../result'
 if not os.path.exists(save_path):
-    os.makedirs(save_path)
+   os.makedirs(save_path)
 
 
 class Resource(object):
-    def __init__(self, env, tp_info, wf_info, model, monitor, delay_time):
+    def __init__(self, env, model, monitor, tp_info=None, wf_info=None, delay_time=None, network=None):
         self.env = env
         self.model = model
         self.monitor = monitor
         self.delay_time = delay_time
+        self.network = network
 
         # resource 할당
-        self.tp_store = simpy.FilterStore(env)
+        self.tp_store = simpy.Store(env)
         self.wf_store = simpy.FilterStore(env)
-        transporter = namedtuple("Transporter", "name, capa, v_loaded, v_unloaded")
-        workforce = namedtuple("Workforce", "name, skill")
-        for name in tp_info.keys():
-            self.tp_store.put(transporter(name, tp_info[name]["capa"], tp_info[name]["v_loaded"], tp_info[name]["v_unloaded"]))
-        for name in wf_info.keys():
-            self.wf_store.put(workforce(name, wf_info[name]["skill"]))
-
         # resource 위치 파악
         self.tp_location = {}
         self.wf_location = {}
-        for name in tp_info.keys():
-            self.tp_location[name] = []
-        for name in wf_info.keys():
-            self.wf_location[name] = []
+        transporter = namedtuple("Transporter", "name, capa, v_loaded, v_unloaded")
+        workforce = namedtuple("Workforce", "name, skill")
+        if tp_info is not None:
+            for name in tp_info.keys():
+                self.tp_location[name] = []
+                self.tp_store.put(transporter(name, tp_info[name]["capa"], tp_info[name]["v_loaded"], tp_info[name]["v_unloaded"]))
+            # No resource is in resource store -> machine hv to wait
+            self.tp_waiting = OrderedDict()
+        if wf_info is not None:
+            for name in wf_info.keys():
+                self.wf_location[name] = []
+                self.wf_store.put(workforce(name, wf_info[name]["skill"]))
+            # No resource is in resource store -> machine hv to wait
+            self.wf_waiting = OrderedDict()
 
-    def request_tp(self, process_requesting, next_process, distance_to_requesting, distance_to_destination, min_capa, part=None):
-        self.monitor.record(self.env.now, process_requesting, None, part_id=part.id, event="tp_request")
-        if len(self.tp_store.items) > 0:
-            tp = yield self.tp_store.get(lambda item: item.capa == min_capa)
-        else:
+
+    def request_tp(self, current_process):
+        tp, waiting = False, False
+
+        if len(self.tp_store.items) > 0:  # 만약 tp_store에 남아있는 transporter가 있는 경우
+            tp = yield self.tp_store.get()
+            self.monitor.record(self.env.now, None, None, part_id=None, event="tp_going_to_requesting_process",
+                                resource=tp.name)
+            return tp, waiting
+        else:  # transporter가 전부 다른 공정에 가 있을 경우
             tp_location_list = []
             for name in self.tp_location.keys():
-                tp_location_list.append(self.tp_location[name][-1])
-            location = random.choice(tp_location_list)
-            tp = yield self.model[location].tp_store.get(lambda item: item.capa == min_capa)
+                if not self.tp_location[name]:
+                    continue
+                tp_current_location = self.tp_location[name][-1]
+                if len(self.model[tp_current_location].tp_store.items) > 0:  # 해당 공정에 놀고 있는 tp가 있다면
+                    tp_location_list.append(self.tp_location[name][-1])
 
-        yield self.env.timeout(distance_to_requesting / tp.v_unloaded)
-        self.monitor.record(self.env.now, process_requesting, None, part_id=part.id, event="tp_arriving")
-        yield self.env.timeout(distance_to_destination / tp.v_loaded)
-        self.monitor.record(self.env.now, process_requesting, None, part_id=part.id, event="tp_released")
-        self.model[next_process].put(part)
+            if len(tp_location_list) == 0:  # 유휴 tp가 없는 경우
+                waiting = True
+                return tp, waiting
 
-        self.model[next_process].tp_store.put(tp)
-        self.tp_location[tp.name].append(next_process)
+            else:  # 유휴 tp가 있어 part을 실을 수 있는 경우
+                # tp를 호출한 공정 ~ 유휴 tp 사이의 거리 중 가장 짧은 데에서 호출
+                distance = []
+                for location in tp_location_list:
+                    called_distance = self.network.get_shortest_path_distance(location, current_process)
+                    distance.append(called_distance)
+                # distance = list(map(lambda i: self.network.get_shortest_path_distance(tp_location_list[i], current_process), tp_location_list))
+                location_idx = distance.index(min(distance))
+                location = tp_location_list[location_idx]
+                tp = yield self.model[location].tp_store.get()
+                self.monitor.record(self.env.now, None, None, part_id=None, event="tp_going_to_requesting_process", resource=tp.name)
+                yield self.env.timeout(distance[location_idx]/tp.v_unloaded)  # 현재 위치까지 오는 시간
+                return tp, waiting
 
-    def request_wf(self, process_requesting):
-        print(0)
-
-    def delaying(self):
-        yield self.env.timeout(self.delay_time)
-        return
+    # def delaying(self):
+    #     yield self.env.timeout(self.delay_time)
+    #     return
 
 
 class Part(object):
@@ -106,24 +124,27 @@ class Source(object):
 
 
 class Process(object):
-    def __init__(self, env, name, machine_num, model, monitor, resource=None, process_time=None, capacity=float('inf'),
+    def __init__(self, env, name, machine_num, model, monitor, resource=None, network=None,process_time=None, capacity=float('inf'),
                  routing_logic='cyclic', priority=None, capa_to_machine=float('inf'), capa_to_process=float('inf'),
-                 MTTR=None, MTTF=None, initial_broken_delay=None, delay_time=None):
+                 MTTR=None, MTTF=None, initial_broken_delay=None, delay_time=None, workforce=None, transporter=False):
         # input data
         self.env = env
         self.name = name
         self.model = model
         self.monitor = monitor
-        self.resource = resource
-        self.process_time = process_time[self.name] if process_time is not None else [None for _ in range(machine_num)]
+        self.resource = resource  # Resource class
+        self.network = network  # Network class
         self.capa = capacity
         self.machine_num = machine_num
         self.routing_logic = routing_logic
+        self.process_time = process_time[self.name] if process_time is not None else [None for _ in range(machine_num)]
         self.priority = priority[self.name] if priority is not None else [1 for _ in range(machine_num)]
         self.MTTR = MTTR[self.name] if MTTR is not None else [None for _ in range(machine_num)]
         self.MTTF = MTTF[self.name] if MTTF is not None else [None for _ in range(machine_num)]
         self.initial_broken_delay = initial_broken_delay[self.name] if initial_broken_delay is not None else [None for _ in range(machine_num)]
         self.delay_time = delay_time[name] if delay_time is not None else None
+        self.workforce = workforce[self.name] if workforce is not None else [False for _ in range(machine_num)]  # workforce 사용 여부
+        self.transporter = transporter
 
         # variable defined in class
         self.parts_sent = 0
@@ -136,10 +157,14 @@ class Process(object):
         # buffer and machine
         self.buffer_to_machine = simpy.Store(env, capacity=capa_to_machine)
         self.buffer_to_process = simpy.Store(env, capacity=capa_to_process)
-        self.machine = [Machine(env, '{0}_{1}'.format(self.name, i), self.name, process_time=self.process_time[i],
-                                priority=self.priority[i], out=self.buffer_to_process, waiting=self.waiting_machine,
-                                monitor=monitor, MTTF=self.MTTF[i], MTTR=self.MTTR[i],
-                                initial_broken_delay=self.initial_broken_delay[i]) for i in range(self.machine_num)]
+        self.machine = [Machine(env, '{0}_{1}'.format(self.name, i), self.name, self.resource,
+                                process_time=self.process_time[i], priority=self.priority[i], out=self.buffer_to_process,
+                                waiting=self.waiting_machine, monitor=monitor, MTTF=self.MTTF[i], MTTR=self.MTTR[i],
+                                initial_broken_delay=self.initial_broken_delay[i],
+                                workforce=self.workforce[i]) for i in range(self.machine_num)]
+        # resource
+        self.tp_store = simpy.Store(self.env)
+        self.wf_store = simpy.Store(self.env)
 
         # get run functions in class
         env.process(self.to_machine())
@@ -171,14 +196,15 @@ class Process(object):
     def to_process(self):
         while True:
             part = yield self.buffer_to_process.get()
+
             # next process
             step = 1
-            while not part.data[(part.step + step, 'process_time')]:
-                if part.data[(part.step + step, 'process')] != 'Sink':
-                    step += 1
-                else:
-                    break
-
+            # while not part.data[(part.step + step, 'process_time')]:
+            #     if part.data[(part.step + step, 'process')] != 'Sink':
+            #         step += 1
+            #         break
+            #     else:
+            #         break
             next_process_name = part.data[(part.step + step, 'process')]
             next_process = self.model[next_process_name]
             if next_process.__class__.__name__ == 'Process':
@@ -190,24 +216,60 @@ class Process(object):
                     self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="delay_finish_out_buffer")
 
                 # part transfer
-                next_process.buffer_to_machine.put(part)
-                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="part_transferred_to_next_process")
-            else:
+                if self.transporter is True:  # using transporter
+                    self.monitor.record(self.env.now, self.name, None, part_id=None, event="tp_request")
+                    tp, waiting = False, True
+                    while waiting:
+                        tp, waiting = yield self.env.process(self.resource.request_tp(self.name))
+                        if not waiting:
+                            break
+                        # if waiting is True == All tp is moving == process hv to delay
+                        else:
+                            self.resource.tp_waiting[part.id] = self.env.event()
+                            self.monitor.record(self.env.now, self.name, None, part_id=part.id,
+                                                event="delay_start_cus_no_tp")
+                            yield self.resource.tp_waiting[part.id]
+                            self.monitor.record(self.env.now, self.name, None, part_id=part.id,
+                                                event="delay_finish_cus_yes_tp")
+                            continue
+                    if tp is not None:
+                        self.monitor.record(self.env.now, self.name, None, part_id=part.id,
+                                            event="tp_going_to_next_process", resource=tp.name)
+                        distance_to_move = self.network.get_shortest_path_distance(self.name, next_process_name)
+                        yield self.env.timeout(distance_to_move/tp.v_loaded)
+                        self.monitor.record(self.env.now, next_process_name, None, part_id=part.id,
+                                            event="tp_finished_transferred_to_next_process", resource=tp.name)
+                        next_process.buffer_to_machine.put(part)
+                        self.monitor.record(self.env.now, self.name, None, part_id=part.id,
+                                            event="part_transferred_to_next_process_with_tp")
+                        next_process.tp_store.put(tp)
+                        self.resource.tp_location[tp.name].append(next_process_name)
+                        # 가용한 tp 하나 발생 -> delay 끝내줌
+                        if len(self.resource.tp_waiting) > 0:
+                            self.resource.tp_waiting.popitem(last=False)[1].succeed()
+
+                else:  # not using transporter
+                    next_process.buffer_to_machine.put(part)
+                    self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="part_transferred_to_next_process")
+            else:  # next_process == Sink
                 next_process.put(part)
                 self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="part_transferred_to_Sink")
 
             part.step += step
+            self.parts_sent += 1
 
             if (len(self.buffer_to_process.items) < self.buffer_to_process.capacity) and (len(self.waiting_machine) > 0):
                 self.waiting_machine.popitem(last=False)[1].succeed()  # delay = (part_id, event)
 
 
 class Machine(object):
-    def __init__(self, env, name, process_name, process_time, priority, out, waiting, monitor, MTTF, MTTR, initial_broken_delay):
+    def __init__(self, env, name, process_name, resource, process_time, priority, out, waiting, monitor,
+                 MTTF, MTTR, initial_broken_delay, workforce):
         # input data
         self.env = env
         self.name = name
         self.process_name = process_name
+        self.resource = resource
         self.process_time = process_time
         self.priority = priority
         self.out = out
@@ -216,6 +278,7 @@ class Machine(object):
         self.MTTR = MTTR
         self.MTTF = MTTF
         self.initial_broken_delay = initial_broken_delay
+        self.workforce = workforce
 
         # variable defined in class
         self.machine = simpy.Store(env)
@@ -243,14 +306,28 @@ class Machine(object):
             self.broken = True
             part = yield self.machine.get()
             self.working = True
-
+            wf = None
             # process_time
-            if self.process_time is None:  # part에 process_time이 미리 주어지는 경우
+            if self.process_time == None:  # part에 process_time이 미리 주어지는 경우
                 proc_time = part.data[(part.step, "process_time")]
             else:  # service time이 정해진 경우 --> 1) fixed time / 2) Stochastic-time
                 proc_time = self.process_time if type(self.process_time) == float else self.process_time()
             self.planned_proc_time = proc_time
 
+            if self.workforce is True:
+                resource_item = list(map(lambda item: item.name, self.resource.wf_store.items))
+                self.monitor.record(self.env.now, self.process_name, self.name, part_id=part.id, event="workforce_request", resource=resource_item)
+                while len(self.resource.wf_store.items) == 0:
+                    self.resource.wf_waiting[part.id] = self.env.event()
+                    self.monitor.record(self.env.now, self.process_name, self.name, part_id=part.id,
+                                        event="delay_start_machine_cus_no_resource")
+                    yield self.resource.wf_waiting[part.id]  # start delaying
+
+                self.monitor.record(self.env.now, self.process_name, self.name, part_id=part.id,
+                                    event="delay_finish_machine_cus_yes_resource")
+                wf = yield self.resource.wf_store.get()
+                self.monitor.record(self.env.now, self.process_name, self.name, part_id=part.id,
+                                    event="workforce get in the machine", resource=wf.name)
             while proc_time:
                 if self.MTTF is not None:
                     self.env.process(self.break_machine())
@@ -286,6 +363,15 @@ class Machine(object):
                     self.broken_start = self.unbroken_start + mttf_time
 
             self.working = False
+
+            if self.workforce is True:
+                self.monitor.record(self.env.now, self.process_name, self.name, part_id=part.id, event="workforce_used_out", resource=wf.name)
+                self.resource.wf_store.put(wf)
+                self.monitor.record(self.env.now, self.process_name, self.name, part_id=part.id,
+                                    event="workforce get out the machine", resource=wf.name)
+                if (len(self.resource.wf_store.items) > 0) and (len(self.resource.wf_waiting) > 0):
+                    self.resource.wf_waiting.popitem(last=False)[1].succeed()  # delay = (part_id, event)
+
             # start delaying at machine cause buffer_to_process is full
             if len(self.out.items) == self.out.capacity:
                 self.waiting[part.id] = self.env.event()
@@ -321,7 +407,6 @@ class Machine(object):
         #     self.action.interrupt()
 
 
-
 class Sink(object):
     def __init__(self, env, monitor):
         self.env = env
@@ -347,13 +432,15 @@ class Monitor(object):
         self.part_id=[]
         self.process=[]
         self.subprocess=[]
+        self.resource = []
 
-    def record(self, time, process, subprocess, part_id=None, event=None):
+    def record(self, time, process, subprocess, part_id=None, event=None, resource=None):
         self.time.append(time)
         self.event.append(event)
         self.part_id.append(part_id)
         self.process.append(process)
         self.subprocess.append(subprocess)
+        self.resource.append(resource)
 
     def save_event_tracer(self):
         event_tracer = pd.DataFrame(columns=['Time', 'Event', 'Part', 'Process', 'SubProcess'])
@@ -362,6 +449,7 @@ class Monitor(object):
         event_tracer['Part'] = self.part_id
         event_tracer['Process'] = self.process
         event_tracer['SubProcess'] = self.subprocess
+        event_tracer['Resource'] = self.resource
         event_tracer.to_csv(self.filepath)
 
         return event_tracer
@@ -399,3 +487,15 @@ class Routing(object):
                 idx_possible = i
                 break
         return idx_possible
+
+
+class Network(object):
+    def __init__(self, graph, gis_graph):
+        self.graph = graph
+        self.gis_graph = gis_graph
+
+    def get_shortest_path_distance(self, location_type_from, location_type_to):
+        shortest_path_length_dict = dict(nx.shortest_path_length(self.gis_graph, weight='distance'))
+        shortest_path_length = shortest_path_length_dict[location_type_from][location_type_to]
+
+        return shortest_path_length

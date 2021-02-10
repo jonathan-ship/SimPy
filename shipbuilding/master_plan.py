@@ -6,10 +6,12 @@ import time
 import random
 from datetime import datetime
 
-from SimComponents import Source, Sink, Process, Monitor
+from SimComponents_rev import Source, Resource, Process, Sink, Monitor, Network, Part
+start_run = time.time()
+from network.masterplan_network import proc_network, gis_network  # network graph
 
 # 코드 실행 시각
-start_run = time.time()
+
 
 ## Pre-Processing
 # DATA INPUT
@@ -52,33 +54,46 @@ for block_code in block_list:
     temp = data[data['BLOCKCODE'] == block_code]
     temp_1 = temp.sort_values(by=['PLANSTARTDATE'], axis=0, inplace=False)
     temp = temp_1.reset_index(drop=True)
-    df.loc[idx] = [None for _ in range(len(df.columns))]
+    df.loc[block_code] = [None for _ in range(len(df.columns))]
     n = 0  # 저장된 공정 개수
     for i in range(0, len(temp)):
         activity = temp['ACTIVITY'][i]
-        df.loc[idx][(n, 'start_time')] = temp['PLANSTARTDATE'][i]
-        df.loc[idx][(n, 'process_time')] = temp['PLANDURATION'][i]
-        df.loc[idx][(n, 'process')] = activity
+        df.loc[block_code][(n, 'start_time')] = temp['PLANSTARTDATE'][i]
+        df.loc[block_code][(n, 'process_time')] = temp['PLANDURATION'][i]
+        df.loc[block_code][(n, 'process')] = activity
         n += 1
 
-    df.loc[idx][(n, 'process')] = 'Sink'
-    idx += 1
+    df.loc[block_code][(n, 'process')] = 'Sink'
 
+print(df)
 df.sort_values(by=[(0, 'start_time')], axis=0, inplace=True)
-df = df.reset_index(drop=True)
-df = pd.concat([df_part, df], axis=1)
+
+parts = []
+for i in range(len(df)):
+    parts.append(Part(df.index[i], df.iloc[i]))
 
 env = simpy.Environment()
 model = {}
 server_num = np.full(len(process_list), 1)
 
-monitor = Monitor('../result/event_log_master_plan.csv')
-source = Source(env, 'Source', df, model, monitor)
+Monitor = Monitor('../result/event_log_master_plan_with_tp.csv')
+Network = Network(proc_network, gis_network)
+
+# Resource
+tp_info = {}
+tp_num = 5
+for i in range(tp_num):
+    tp_info["TP_{0}".format(i+1)] = {"capa": 100, "v_loaded": 0.5, "v_unloaded": 1.0}
+Resource = Resource(env, model, Monitor, tp_info=tp_info, network=Network)
+
+source = Source(env, parts, model, Monitor)
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', monitor)
+        model['Sink'] = Sink(env, Monitor)
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, monitor)
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, resource=Resource, network=Network, transporter=True)
+
+
 
 start = time.time()
 env.run()
@@ -93,4 +108,4 @@ print("data pre-processing : ", start - start_run)
 print("simulation execution time :", finish - start)
 print("total time : ", finish - start_run)
 
-event_tracer = monitor.save_event_tracer()
+event_tracer = Monitor.save_event_tracer()
