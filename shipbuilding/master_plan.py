@@ -6,16 +6,15 @@ import time
 import random
 from datetime import datetime
 
-from SimComponents_rev import Source, Resource, Process, Sink, Monitor, Network, Part
+from SimComponents_rev import Source, Resource, Process, Sink, Monitor, Part
 start_run = time.time()
-from network.masterplan_network import proc_network, gis_network  # network graph
 
 # 코드 실행 시각
 
 
 ## Pre-Processing
 # DATA INPUT
-data_all = pd.read_excel('../data/MCM_ACTIVITY.xls')
+data_all = pd.read_excel('../data/master_planning.xlsx')
 data = data_all[['PROJECTNO', 'ACTIVITYCODE', 'LOCATIONCODE', 'PLANSTARTDATE', 'PLANFINISHDATE', 'PLANDURATION']]
 
 # DATA PRE-PROCESSING
@@ -76,23 +75,24 @@ env = simpy.Environment()
 model = {}
 server_num = np.full(len(process_list), 1)
 
-Monitor = Monitor('../result/event_log_master_plan_with_tp.csv')
-Network = Network(proc_network, gis_network)
+Monitor = Monitor('../result/event_log_master_plan_with_tp_df.csv')
 
+# network -> distance data
+network_dist = pd.read_excel('../network/distance_data_masterplan.xlsx')
+network_dist = network_dist.set_index('Unnamed: 0', drop=True)
 # Resource
 tp_info = {}
 tp_num = 5
 for i in range(tp_num):
     tp_info["TP_{0}".format(i+1)] = {"capa": 100, "v_loaded": 0.5, "v_unloaded": 1.0}
-Resource = Resource(env, model, Monitor, tp_info=tp_info, network=Network)
+Resource = Resource(env, model, Monitor, tp_info=tp_info, network=network_dist)
 
 source = Source(env, parts, model, Monitor)
 for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, Monitor)
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, resource=Resource, network=Network, transporter=True)
-
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, resource=Resource, network=network_dist, transporter=True)
 
 
 start = time.time()

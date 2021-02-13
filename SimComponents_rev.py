@@ -66,7 +66,7 @@ class Resource(object):
                 # tp를 호출한 공정 ~ 유휴 tp 사이의 거리 중 가장 짧은 데에서 호출
                 distance = []
                 for location in tp_location_list:
-                    called_distance = self.network.get_shortest_path_distance(location, current_process)
+                    called_distance = self.network[location][current_process]
                     distance.append(called_distance)
                 # distance = list(map(lambda i: self.network.get_shortest_path_distance(tp_location_list[i], current_process), tp_location_list))
                 location_idx = distance.index(min(distance))
@@ -216,7 +216,7 @@ class Process(object):
                     self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="delay_finish_out_buffer")
 
                 # part transfer
-                if self.transporter is True:  # using transporter
+                if self.transporter is True:  # if machine's used transporter
                     self.monitor.record(self.env.now, self.name, None, part_id=None, event="tp_request")
                     tp, waiting = False, True
                     while waiting:
@@ -235,7 +235,7 @@ class Process(object):
                     if tp is not None:
                         self.monitor.record(self.env.now, self.name, None, part_id=part.id,
                                             event="tp_going_to_next_process", resource=tp.name)
-                        distance_to_move = self.network.get_shortest_path_distance(self.name, next_process_name)
+                        distance_to_move = self.network[self.name][next_process_name]
                         yield self.env.timeout(distance_to_move/tp.v_loaded)
                         self.monitor.record(self.env.now, next_process_name, None, part_id=part.id,
                                             event="tp_finished_transferred_to_next_process", resource=tp.name)

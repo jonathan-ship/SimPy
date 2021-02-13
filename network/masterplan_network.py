@@ -47,17 +47,22 @@ for key, values in process_dict.items():
 # gis network : 각 작업장 간의 gis 상의 연결관계 및 거리 정보에 대한 network 생성
 
 location_types = [process for process in process_list]
+df_distance = pd.DataFrame([], index=location_types, columns=location_types)
 
 # generate complete graph
 gis_network = nx.complete_graph(location_types)
 
 for location_type_1 in gis_network.nodes():
     for location_type_2 in gis_network.nodes():
-        if location_type_1 != location_type_2:
-            if location_type_1 != 'Sink' or location_type_2 != 'Sink':
-                gis_network.edges[location_type_1, location_type_2]['distance'] = np.random.randint(100)
-            else:
+        if (location_type_1 != 'Sink' or location_type_2 != 'Sink') and (location_type_1 != location_type_2):
+            distance = np.random.randint(100)
+            gis_network.edges[location_type_1, location_type_2]['distance'] = distance
+            df_distance[location_type_1][location_type_2] = distance
+        else:
+            df_distance[location_type_1][location_type_2] = 0
+            if location_type_1 != location_type_2:
                 gis_network.edges[location_type_1, location_type_2]['distance'] = 0
+
 
 # proc_network : 각 공정정보 및 공정 간 연결관계를 나타내는 network 생성
 # proc_network의 node 명칭 : 각 Process 명
@@ -76,3 +81,5 @@ for key, values in process_dict.items():
             proc_network.edges[values[i], values[i + 1]]['shortest_distance'] = get_shortest_path_distance(gis_network, proc_network.nodes[values[i]]['location_type'],
                                                                                            proc_network.nodes[values[i + 1]]['location_type'])
             proc_network.edges[values[i], values[i + 1]]['relation_type'] = 'FS'
+
+df_distance.to_excel('../network/distance_data_masterplan.xlsx')
