@@ -7,10 +7,9 @@ import random
 from datetime import datetime
 
 from SimComponents_rev import Source, Resource, Process, Sink, Monitor, Part
-start_run = time.time()
 
 # 코드 실행 시각
-
+start_run = time.time()
 
 ## Pre-Processing
 # DATA INPUT
@@ -64,7 +63,6 @@ for block_code in block_list:
 
     df.loc[block_code][(n, 'process')] = 'Sink'
 
-print(df)
 df.sort_values(by=[(0, 'start_time')], axis=0, inplace=True)
 
 parts = []
@@ -77,22 +75,35 @@ server_num = np.full(len(process_list), 1)
 
 Monitor = Monitor('../result/event_log_master_plan_with_tp_df.csv')
 
-# network -> distance data
-network_dist = pd.read_excel('../network/distance_data_masterplan.xlsx')
-network_dist = network_dist.set_index('Unnamed: 0', drop=True)
-# Resource
-tp_info = {}
-tp_num = 5
-for i in range(tp_num):
-    tp_info["TP_{0}".format(i+1)] = {"capa": 100, "v_loaded": 0.5, "v_unloaded": 1.0}
-Resource = Resource(env, model, Monitor, tp_info=tp_info, network=network_dist)
-
 source = Source(env, parts, model, Monitor)
-for i in range(len(process_list) + 1):
-    if i == len(process_list):
-        model['Sink'] = Sink(env, Monitor)
-    else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, resource=Resource, network=network_dist, transporter=True)
+
+###################
+# transporter 사용 시 True, 아니면 False
+network_using = True
+
+if network_using:
+    # network -> distance data
+    network_dist = pd.read_excel('../network/distance_data_masterplan.xlsx')
+    network_dist = network_dist.set_index('Unnamed: 0', drop=True)
+    # Resource
+    tp_info = {}
+    tp_num = 5
+    for i in range(tp_num):
+        tp_info["TP_{0}".format(i+1)] = {"capa": 100, "v_loaded": 0.5, "v_unloaded": 1.0}
+    Resource = Resource(env, model, Monitor, tp_info=tp_info, network=network_dist)
+
+    for i in range(len(process_list) + 1):
+        if i == len(process_list):
+            model['Sink'] = Sink(env, Monitor)
+        else:
+            model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, resource=Resource,
+                                             network=network_dist, transporter=True)
+else:
+    for i in range(len(process_list) + 1):
+        if i == len(process_list):
+            model['Sink'] = Sink(env, Monitor)
+        else:
+            model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
 
 start = time.time()
