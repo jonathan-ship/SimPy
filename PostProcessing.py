@@ -13,6 +13,7 @@ def graph(x, y, title=None, display=False, save=False, filepath=None):
         plt.show()
     if save:
         fig.savefig(filepath + "/" + title + ".png")
+        plt.close("all")
 
 def cal_utilization(log, name=None, type=None, num=1, start_time=0.0, finish_time=0.0, step=None, display=False, save=False, filepath=None):
     log = log[(log[type] == name) & ((log["Event"] == "work_start") | (log["Event"] == "work_finish"))]
@@ -100,13 +101,16 @@ def cal_utilization(log, name=None, type=None, num=1, start_time=0.0, finish_tim
 
 def cal_leadtime(log, name=None, type=None, mode="m", start_time=0.0, finish_time=0.0):
     event = {"m": ("part_created", "completed"),
-             "p": ("queue_entered", "part_transferred")}
+             "p": ("Process_entered", "part_transferred_to_next_process", "part_transferred_to_next_process_with_tp", "part_transferred_to_Sink")}
 
     if not mode == "m":
         log = log[log[type] == name]
 
     leadtime_start = log[log["Event"] == event[mode][0]]
-    leadtime_finish = log[log["Event"] == event[mode][1]]
+    if mode == "p":
+        leadtime_finish = log[(log["Event"] == event[mode][1]) | (log["Event"] == event[mode][2]) | (log["Event"] == event[mode][3])]
+    else:
+        leadtime_finish = log[log["Event"] == event[mode][1]]
 
     idx = (leadtime_finish["Time"] >= start_time) & (leadtime_finish["Time"] <= finish_time)
 
@@ -125,9 +129,13 @@ def cal_leadtime(log, name=None, type=None, mode="m", start_time=0.0, finish_tim
     return lead_time
 
 
-def cal_throughput(log, name, type, start_time=0.0, finish_time=0.0, step=None, display=False, save=False, filepath=None):
-    log = log[(log[type] == name) & (log["Event"] == "part_transferred")]
-
+def cal_throughput(log, name, type, mode='m', start_time=0.0, finish_time=0.0, step=None, display=False, save=False, filepath=None):
+    if mode == 'm':
+        log = log[(log[type] == name) & (log["Event"] == "part_transferred_to_Sink")]
+    else:
+        log = log[(log[type] == name) & ((log["Event"] == "part_transferred_to_next_process")
+                                         |(log["Event"] == "part_transferred_to_next_process_with_tp")
+                                         |(log["Event"] == "part_transferred_to_Sink"))]
     if step:
         iteration = step
     else:
@@ -158,12 +166,16 @@ def cal_throughput(log, name, type, start_time=0.0, finish_time=0.0, step=None, 
 
 def cal_wip(log, name=None, type=None, mode="m", start_time=0.0, finish_time=0.0, step=None, display=False, save=False, filepath=None):
     event = {"m": ("part_created", "completed"),
-             "p": ("queue_entered", "part_transferred"),
-             "q": ("queue_entered", "queue_released")}
+             "p": ("Process_entered", "part_transferred_to_next_process", "part_transferred_to_next_process_with_tp", "part_transferred_to_Sink"),
+             "q": ("Process_entered", "work_start")}
 
     if not mode == "m":
         log = log[log[type] == name]
-    log = log[(log["Event"] == event[mode][0]) | (log["Event"] == event[mode][1])]
+    if mode == "p":
+        log = log[(log["Event"] == event[mode][0]) | (log["Event"] == event[mode][1])
+                  | (log["Event"] == event[mode][2]) | (log["Event"] == event[mode][3])]
+    else:
+        log = log[(log["Event"] == event[mode][0]) | (log["Event"] == event[mode][1])]
 
     if step:
         iteration = step
@@ -182,12 +194,15 @@ def cal_wip(log, name=None, type=None, mode="m", start_time=0.0, finish_time=0.0
         data = log[(log["Time"] >= start_time) & (log["Time"] <= finish_time)]
 
         total_time = finish_time - start_time
-        data_by_group = data.groupby(data["SubProcess"])
+        data_by_group = data.groupby(data["Process"])
         for j, group in data_by_group:
             wip_start = group[group["Event"] == event[mode][0]]
-            wip_finish = group[group["Event"] == event[mode][1]]
+            if not mode == "p":
+                wip_finish = group[group["Event"] == event[mode][1]]
+            else:
+                wip_finish = group[(group["Event"] == event[mode][1]) | (group["Event"] == event[mode][2]) | (group["Event"] == event[mode][3])]
             if len(wip_start) == 0 and len(wip_finish) == 0:
-                temp = log[log["SubProcess"] == j]
+                temp = log[log["Process"] == j]
                 if len(temp) != 0:
                     idx = temp["Time"] >= start_time
                     if temp[idx].iloc[0]["Event"] == event[mode][1]:
