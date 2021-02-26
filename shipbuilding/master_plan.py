@@ -88,7 +88,7 @@ if network_using:
     network_dist = network_dist.set_index('Unnamed: 0', drop=True)
     # Resource
     tp_info = {}
-    tp_num = 20
+    tp_num = 100
     for i in range(tp_num):
         tp_info["TP_{0}".format(i+1)] = {"capa": 100, "v_loaded": 0.5, "v_unloaded": 1.0}
     Resource = Resource(env, model, Monitor, tp_info=tp_info, network=network_dist)
@@ -108,6 +108,7 @@ else:
 
 # recording time
 start = time.time()
+time.sleep(170)
 env.run()
 finish = time.time()
 
