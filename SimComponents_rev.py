@@ -1,6 +1,7 @@
 import simpy
 import os
 import random
+import time
 import pandas as pd
 import numpy as np
 import networkx as nx
@@ -102,6 +103,7 @@ class Source(object):
         self.action = env.process(self.run())
 
     def run(self):
+        time.sleep(150)
         while True:
             part = self.parts.pop(0)
 
