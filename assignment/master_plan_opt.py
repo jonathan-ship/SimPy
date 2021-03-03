@@ -5,11 +5,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from datetime import datetime
-from SimComponents import Source, Sink, Process, Monitor
+from SimComponents_rev import Source, Sink, Process, Monitor, Part
 from PostProcessing import cal_utilization
 
 
-def optimimze(process_list, data):
+def optimimze(process_list, parts):
 
     # initialize the number of servers(sub-processes) and utilization
     server_num = np.full(len(process_list), 1)
@@ -21,11 +21,11 @@ def optimimze(process_list, data):
         # modeling the source, process, and monitor
         env = simpy.Environment()
         model = {}
-        monitor = Monitor('../result/event_log_master_plan.csv')
-        source = Source(env, 'Source', data, model, monitor)
+        monitor = Monitor('../result/event_log_master_plan_opt.csv')
+        source = Source(env, parts[:], model, monitor)
         for i in range(len(process_list) + 1):
             if i == len(process_list):
-                model['Sink'] = Sink(env, 'Sink', monitor)
+                model['Sink'] = Sink(env, monitor)
             else:
                 model[process_list[i]] = Process(env, process_list[i], server_num[i], model, monitor)
 
@@ -37,7 +37,7 @@ def optimimze(process_list, data):
         monitor.save_event_tracer()
 
         # calculate the utilization
-        log = pd.read_csv('../result/event_log_master_plan.csv')
+        log = pd.read_csv('../result/event_log_master_plan_opt.csv')
         for i in range(len(process_list)):
             utilization[i], _, _ = cal_utilization(log, name=process_list[i], type="Process", num=server_num[i],
                                                    start_time=0.0, finish_time=model["Sink"].last_arrival)
@@ -45,6 +45,9 @@ def optimimze(process_list, data):
         # if the utilization is higher than 0.9, increase the number of servers in the corresponding process
         idx_up = utilization > 0.9
         server_num[idx_up] += 1
+
+        for part in parts:
+            part.step = 0
 
     return server_num, utilization
 
@@ -97,11 +100,15 @@ if __name__ == "__main__":
     # sort the dataframe according to the start date of first activity of blocks
     data_processed = data_processed.sort_values(by=[(0, 'start_time')], axis=0)
 
+    parts = []
+    for i in range(len(data_processed)):
+        parts.append(Part(data_processed.index[i], data_processed.iloc[i]))
+
     preprocessing_finish = time.time()
     print("preprocessing time: {0}".format(preprocessing_finish - preprocessing_start))
 
     # find the optimal number of sub-processes for each process
-    server_num, utilization = optimimze(process_list, data_processed)
+    server_num, utilization = optimimze(process_list, parts)
 
     # graph the results of optimization
     fig, ax1 = plt.subplots()
