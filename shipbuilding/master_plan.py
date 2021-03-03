@@ -13,7 +13,6 @@ start_run = time.time()
 
 # 코드 실행 시각
 
-
 ## Pre-Processing
 # DATA INPUT
 data_all = pd.read_excel('../data/master_planning.xlsx', engine = 'openpyxl')
@@ -108,7 +107,6 @@ else:
 
 # recording time
 start = time.time()
-time.sleep(170)
 env.run()
 finish = time.time()
 
