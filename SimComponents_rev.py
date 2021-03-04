@@ -103,7 +103,6 @@ class Source(object):
         self.action = env.process(self.run())
 
     def run(self):
-        time.sleep(150)
         while True:
             part = self.parts.pop(0)
 
