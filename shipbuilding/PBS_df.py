@@ -6,7 +6,7 @@ import simpy
 import time
 import functools
 
-from SimComponents_rev import Source, Sink, Process, Monitor, Part
+from SimComponents import Source, Sink, Process, Monitor, Part
 
 # 코드 실행 시작 시각
 start_run = time.time()
@@ -54,6 +54,10 @@ for i in range(len(df)):
 #
 # wf_info["WF_1"] = {"skill":1.0}
 # wf_info["WF_2"] = {"skill":1.2}
+
+parts = []
+for i in range(len(df)):
+    parts.append(Part(df.index[i], df.iloc[i]))
 
 # Modeling
 env = simpy.Environment()

@@ -4,7 +4,7 @@ import time
 import pandas as pd
 import scipy.stats as st
 
-from SimComponents import Source, Sink, Process, Monitor
+from SimComponents import Source, Sink, Process, Monitor, Part
 
 # 코드 실행 시작 시각
 start_0 = time.time()
@@ -45,6 +45,10 @@ df[(0, 'process')] = list(data['process1'])
 df[(1, 'process')] = list(data['process2'])
 df[(2, 'process')] = 'Sink'
 
+parts = []
+for i in range(len(df)):
+    parts.append(Part(df.index[i], df.iloc[i]))
+
 # Modeling
 env = simpy.Environment()
 
@@ -58,14 +62,14 @@ server_num = [1 for _ in range(len(process_list))]
 filepath = '../result/event_log_supply_chain.csv'
 Monitor = Monitor(filepath)
 
-Source = Source(env, 'Source', df, model, Monitor)
+Source = Source(env, parts, model, Monitor)
 
 # process modeling
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', Monitor)
+        model['Sink'] = Sink(env, Monitor)
     else:
-        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, qlimit=1)
+        model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor, capacity=1)
 
 # Simulation
 start = time.time()  # 시뮬레이션 실행 시작 시각

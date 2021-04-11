@@ -3,7 +3,7 @@ import time
 import pandas as pd
 import numpy as np
 
-from SimComponents import Source, Sink, Process, Monitor
+from SimComponents import Source, Sink, Process, Monitor, Part
 
 # 코드 실행 시작 시각
 start_0 = time.time()
@@ -53,6 +53,10 @@ for i in range(len(process_list)):
 
 df[(3, 'start_time')], df[(3, 'process_time')], df[(3, 'process')] = None, None, 'Sink'
 
+parts = []
+for i in range(len(df)):
+    parts.append(Part(df.index[i], df.iloc[i]))
+
 # Modeling
 env = simpy.Environment()
 
@@ -68,12 +72,12 @@ filepath = '../result/event_log_block_movement_actual.csv'
 Monitor = Monitor(filepath)
 
 # Source
-Source = Source(env, 'Source', df, model, Monitor)
+Source = Source(env, parts, model, Monitor)
 
 # Process Modeling
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', Monitor)
+        model['Sink'] = Sink(env, Monitor)
     else:
         model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
