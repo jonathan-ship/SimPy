@@ -30,4 +30,4 @@ env.process(very_fast_clock)
 
 ## simulation run.
 ## Run infinitely if time is not assigned as argument)
-env.run(until=2)
+env.run(until=100)

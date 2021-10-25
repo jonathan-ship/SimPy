@@ -25,4 +25,4 @@ class Car(object):
 
 env = simpy.Environment()
 car = Car(env)
-env.run(until=15)
+env.run(until=100)

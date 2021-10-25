@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from datetime import datetime
-from SimComponents_rev import Source, Sink, Process, Monitor, Part
+from SimComponents import Source, Sink, Process, Monitor, Part
 from PostProcessing import cal_utilization
 
 

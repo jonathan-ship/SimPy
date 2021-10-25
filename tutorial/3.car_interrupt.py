@@ -32,5 +32,5 @@ def driver(env, car):
 env = simpy.Environment()
 car = Car(env)
 env.process(driver(env, car))
-env.run(until=15)
+env.run(until=100)
 

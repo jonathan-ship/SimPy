@@ -21,4 +21,4 @@ def car(env):
 
 env = simpy.Environment()
 env.process(car(env))
-env.run(until=20)
+env.run(until=100)
