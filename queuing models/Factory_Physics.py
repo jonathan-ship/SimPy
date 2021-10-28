@@ -4,7 +4,7 @@ import scipy.stats as st
 import pandas as pd
 import numpy as np
 
-from SimComponents import Sink, Process, Source, Monitor
+from SimComponents import Sink, Process, Source, Monitor, Part
 
 # 코드 실행 시작 시각
 start_0 = time.time()
@@ -35,6 +35,10 @@ data[(2, 'process')] = 'Sink'
 
 data = pd.concat([df_part, data], axis=1)
 
+parts = list()
+for i in range(len(data)):
+    parts.append(Part(data.index[i], data.iloc[i]))
+
 ##
 env = simpy.Environment()
 model = {}
@@ -48,12 +52,12 @@ filepath = '../result/event_log_factory_physics.csv'
 Monitor = Monitor(filepath)
 
 # Source
-Source = Source(env, 'Source', data, model, Monitor)
+Source = Source(env, parts, model, Monitor)
 
 # Process Modeling
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', Monitor)
+        model['Sink'] = Sink(env, Monitor)
     else:
         model[process_list[i]] = Process(env, process_list[i], server_num[i], model, Monitor)
 
@@ -62,8 +66,6 @@ start = time.time()  # 시뮬레이션 시작 시각
 env.run()
 finish = time.time()  # 시뮬레이션 종료 시각
 
-for process in process_list:
-    print("server: ", np.max(model[process].len_of_server))
 
 print('#' * 80)
 print("Results of Factory Physics Simulation")

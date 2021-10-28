@@ -12,7 +12,7 @@ import scipy.stats as st
 import functools
 import time
 
-from SimComponents import Source, Sink, Process, Monitor
+from SimComponents import Source, Sink, Process, Monitor, Part
 
 start_run = time.time()
 
@@ -42,6 +42,10 @@ data[(1, 'start_time')] = None
 data[(1, 'process_time')] = None
 data[(1, 'process')] = 'Sink'
 
+parts = list()
+for i in range(len(data)):
+    parts.append(Part(data.index[i], data.iloc[i]))
+
 # process_time
 service_time = functools.partial(np.random.exponential, 50)
 
@@ -51,14 +55,14 @@ model = {}  # process_dict
 process_time = {"Process1": [service_time]}  # server에 할당할 process time
 
 # Monitoring
-filepath = './result/event_log_MM1.csv'
+filepath = '../result/event_log_MM1.csv'
 Monitor = Monitor(filepath)
 
-Source = Source(env, 'Source', data, model, Monitor)
+Source = Source(env, parts, model, Monitor)
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', Monitor)
+        model['Sink'] = Sink(env, Monitor)
     else:
         model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
                                                     process_time=process_time)

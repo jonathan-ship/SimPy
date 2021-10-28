@@ -1,6 +1,5 @@
 '''
-M/M/1 Case 1
-Run time: 1000s
+M/M/3 Case
 Source IAT = uniform(30, 60)
 Server service time: exponential distribution - 30, 50, 70
 '''
@@ -11,13 +10,12 @@ import scipy.stats as st
 import functools
 import time
 
-from SimComponents import Source, Sink, Process, Monitor
+from SimComponents import Source, Sink, Process, Monitor, Part
 
 start_run = time.time()
 
 server_num = 3
 blocks = 10000
-# run_time = 20000
 
 part = [i for i in range(blocks)]
 
@@ -40,6 +38,11 @@ data[(1, 'start_time')] = None
 data[(1, 'process_time')] = None
 data[(1, 'process')] = 'Sink'
 
+# Part class
+parts = list()
+for i in range(len(data)):
+    parts.append(Part(data.index[i], data.iloc[i]))
+
 # process_time
 service_time_1 = functools.partial(np.random.exponential, 50)
 service_time_2 = functools.partial(np.random.exponential, 30)
@@ -54,11 +57,11 @@ process_time = {"Process1": [service_time_1, service_time_2, service_time_3]}  #
 filepath = '../result/event_log_MM3.csv'
 Monitor = Monitor(filepath)
 
-Source = Source(env, 'Source', data, model, Monitor)
+Source = Source(env, parts, model, Monitor)
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', Monitor)
+        model['Sink'] = Sink(env, Monitor)
     else:
         model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
                                                     process_time=process_time)

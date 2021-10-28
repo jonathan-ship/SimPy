@@ -8,7 +8,7 @@ import simpy
 import pandas as pd
 import time
 
-from SimComponents import Source, Sink, Process, Monitor
+from SimComponents import Source, Sink, Process, Monitor, Part
 
 start_run = time.time()
 
@@ -33,20 +33,24 @@ data[(1, 'start_time')] = None
 data[(1, 'process_time')] = None
 data[(1, 'process')] = 'Sink'
 
+parts = list()
+for i in range(len(data)):
+    parts.append(Part(data.index[i], data.iloc[i]))
+
 # Simulation Modeling
 env = simpy.Environment()
 model = {}
 process_time = {"Process1": [5.0, 10.0, 15.0]}
 
 # Monitoring
-filepath = './result/event_log_DD3_1.csv'
+filepath = '../result/event_log_DD3_1.csv'
 Monitor = Monitor(filepath)
 
-Source = Source(env, 'Source', data, model, Monitor)
+Source = Source(env, parts, model, Monitor)
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):
-        model['Sink'] = Sink(env, 'Sink', Monitor)
+        model['Sink'] = Sink(env, Monitor)
     else:
         model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
                                                     process_time=process_time, routing_logic="least_utilized")
