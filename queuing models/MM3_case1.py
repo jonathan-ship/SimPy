@@ -38,15 +38,15 @@ data[(1, 'start_time')] = None
 data[(1, 'process_time')] = None
 data[(1, 'process')] = 'Sink'
 
-# Part class
-parts = list()
-for i in range(len(data)):
-    parts.append(Part(data.index[i], data.iloc[i]))
-
 # process_time
 service_time_1 = functools.partial(np.random.exponential, 50)
 service_time_2 = functools.partial(np.random.exponential, 30)
 service_time_3 = functools.partial(np.random.exponential, 70)
+
+parts = []
+
+for i in range(len(data)):
+    parts.append(Part(data.index[i], data.iloc[i]))
 
 # Simulation Modeling
 env = simpy.Environment()

@@ -20,7 +20,6 @@ server_num = 1
 blocks = 1000
 run_time = 20000
 
-# df_part: part_id
 part = [i for i in range(blocks)]
 
 # data DataFrame modeling [0, 1] X ["start_time", "process_time", "process"]]
@@ -42,7 +41,8 @@ data[(1, 'start_time')] = None
 data[(1, 'process_time')] = None
 data[(1, 'process')] = 'Sink'
 
-parts = list()
+parts = []
+
 for i in range(len(data)):
     parts.append(Part(data.index[i], data.iloc[i]))
 
