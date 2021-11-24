@@ -25,7 +25,7 @@ columns = pd.MultiIndex.from_product([[i for i in range(len(process_list)+1)], [
 data = pd.DataFrame([], columns=columns, index=part)
 
 # IAT
-IAT = st.uniform.rvs(30, 30, size=blocks)
+IAT = st.expon.rvs(30, size=blocks)
 start_time = IAT.cumsum()
 
 # Process1
@@ -59,12 +59,28 @@ Monitor = Monitor(filepath)
 
 Source = Source(env, parts, model, Monitor)
 
+'''
+if Routing logic is "cyclic", it doesn't need to define anyone as it is default logic 
+if Routing logic is "priority", it needs to define "priority Dictionary" variable
+if Routing logic is "first_possible", it doesn't need to define any variable, but needs to define in Process modeling, "routing_logic="first_possible"" 
+'''
+
+# priority = {"Process1": [1, 3, 2]}
+
 for i in range(len(process_list) + 1):
     if i == len(process_list):
         model['Sink'] = Sink(env, Monitor)
     else:
+        # routing logic : cyclic
         model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
                                                     process_time=process_time)
+        # routing logic : priority
+        # model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
+        #                                             process_time=process_time, routing_logic="priority", priority=priority)
+
+        # routing logic : first_possible
+        # model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
+        #                                             process_time=process_time, routing_logic="first_possible")
 
 start_sim = time.time()
 env.run()

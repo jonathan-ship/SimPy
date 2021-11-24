@@ -173,7 +173,7 @@ class Process(object):
 
     def to_machine(self):
         while True:
-            routing = Routing(self.machine, priority=self.priority)
+            routing = Routing(priority=self.priority)
             if self.delay_time is not None:
                 delaying_time = self.delay_time if type(self.delay_time) == float else self.delay_time()
                 yield self.env.timeout(delaying_time)
@@ -182,7 +182,9 @@ class Process(object):
 
             ## Rouring logic 추가 할 예정
             if self.routing_logic == 'priority':
-                self.machine_idx = routing.priority()
+                self.machine_idx = routing.priority(self.machine)
+            elif self.routing_logic == 'first_possible':
+                self.machine_idx = routing.first_possible(self.machine)
             else:
                 self.machine_idx = 0 if (self.parts_sent_to_machine == 0) or (self.machine_idx == self.machine_num - 1) else self.machine_idx + 1
 
@@ -457,18 +459,17 @@ class Monitor(object):
 
 
 class Routing(object):
-    def __init__(self, server_list=None, priority=None):
-        self.server_list = server_list
+    def __init__(self, priority=None):
         self.idx_priority = np.array(priority)
 
-    def priority(self):
+    def priority(self, server_list):
         i = min(self.idx_priority)
         idx = 0
         while i <= max(self.idx_priority):
             min_idx = np.argwhere(self.idx_priority == i)  # priority가 작은 숫자의 index부터 추출
             idx_min_list = min_idx.flatten().tolist()
             # 해당 index list에서 machine이 idling인 index만 추출
-            idx_list = list(filter(lambda j: (self.server_list[j].working == False), idx_min_list))
+            idx_list = list(filter(lambda j: (server_list[j].working == False), idx_min_list))
             if len(idx_list) > 0:  # 만약 priority가 높은 machine 중 idle 상태에 있는 machine이 존재한다면
                 idx = random.choice(idx_list)
                 break
@@ -481,10 +482,10 @@ class Routing(object):
                     i += 1  # 다음 priority에 대하여 따져봄
         return idx
 
-    def first_possible(self):
-        idx_possible = random.choice(len(self.server_list))  # random index로 초기화 - 모든 서버가 가동중일 때, 서버에 random하게 파트 할당
-        for i in range(len(self.server_list)):
-            if self.server_list[i].working is False:  # 만약 미가동중인 server가 존재할 경우, 해당 서버에 part 할당
+    def first_possible(self, server_list):
+        idx_possible = random.choice([j for j in range(len(server_list))])  # random index로 초기화 - 모든 서버가 가동중일 때, 서버에 random하게 파트 할당
+        for i in range(len(server_list)):
+            if server_list[i].working is False:  # 만약 미가동중인 server가 존재할 경우, 해당 서버에 part 할당
                 idx_possible = i
                 break
         return idx_possible
