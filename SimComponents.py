@@ -4,7 +4,6 @@ import random
 import time
 import pandas as pd
 import numpy as np
-import networkx as nx
 from collections import OrderedDict, namedtuple
 
 save_path = '../result'
@@ -489,15 +488,3 @@ class Routing(object):
                 idx_possible = i
                 break
         return idx_possible
-
-
-class Network(object):
-    def __init__(self, graph, gis_graph):
-        self.graph = graph
-        self.gis_graph = gis_graph
-
-    def get_shortest_path_distance(self, location_type_from, location_type_to):
-        shortest_path_length_dict = dict(nx.shortest_path_length(self.gis_graph, weight='distance'))
-        shortest_path_length = shortest_path_length_dict[location_type_from][location_type_to]
-
-        return shortest_path_length
