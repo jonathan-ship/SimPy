@@ -289,6 +289,7 @@ class Monitor(object):
         event_tracer['Part'] = self.part
         event_tracer['Process'] = self.process_name
         event_tracer['Machine'] = self.machine_name
+
         event_tracer.to_csv(self.filepath)
 
         return event_tracer
