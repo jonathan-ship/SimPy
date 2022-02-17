@@ -75,9 +75,10 @@ for block_code in block_list:
 block_dict = sorted(block_dict.items(), key=lambda x: x[1]['start_time'][0])
 block_dict = OrderedDict(block_dict)
 parts = []
+
 for block_code in block_dict:
-    #parts.append(Part(df.index[i], df.iloc[i]))
     parts.append(Part(block_code, block_dict[block_code]))
+
 env = simpy.Environment()
 model = {}
 server_num = np.full(len(process_list), 1)
@@ -127,7 +128,7 @@ event_tracer = Monitor.save_event_tracer()
 #     print('WIP of ', process_list[i])
 #     print(wip_i)
 #     wip += wip_i['WIP'][98]
-# 
+#
 # for i in range(len(process_list)):
 #     TH = cal_throughput(event_tracer, process_list[i], 'Process', mode='p',
 #                         start_time=0.0, finish_time=model['Sink'].last_arrival, step=100, save=True, filepath='../result')
