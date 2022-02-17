@@ -9,7 +9,7 @@ import numpy as np
 import scipy.stats as st
 import functools
 import time
-
+from collections import OrderedDict
 from SimComponents import Source, Sink, Process, Monitor, Part
 
 start_run = time.time()
@@ -28,15 +28,21 @@ data = pd.DataFrame([], columns=columns, index=part)
 IAT = st.expon.rvs(30, size=blocks)
 start_time = IAT.cumsum()
 
+block_dict = OrderedDict()
+for i in range(blocks):
+    block_dict[part[i]] = {'start_time': list(), 'process_time': list(), 'process': list()}
+    block_dict[part[i]]['start_time'] = [start_time[i], None]
+    block_dict[part[i]]['process_time'] = [None, None]
+    block_dict[part[i]]['process'] = ['Process1', 'Sink']
 # Process1
-data[(0, 'start_time')] = start_time
-data[(0, 'process_time')] = None
-data[(0, 'process')] = "Process1"
-
-# Sink
-data[(1, 'start_time')] = None
-data[(1, 'process_time')] = None
-data[(1, 'process')] = 'Sink'
+# data[(0, 'start_time')] = start_time
+# data[(0, 'process_time')] = None
+# data[(0, 'process')] = "Process1"
+#
+# # Sink
+# data[(1, 'start_time')] = None
+# data[(1, 'process_time')] = None
+# data[(1, 'process')] = 'Sink'
 
 # process_time
 service_time_1 = functools.partial(np.random.exponential, 50)
@@ -45,8 +51,8 @@ service_time_3 = functools.partial(np.random.exponential, 70)
 
 parts = []
 
-for i in range(len(data)):
-    parts.append(Part(data.index[i], data.iloc[i]))
+for block in block_dict:
+    parts.append(Part(block, block_dict[block]))
 
 # Simulation Modeling
 env = simpy.Environment()
@@ -105,22 +111,22 @@ print("IAT: uniform(30, 60), Service Time: exponential(30), exponential(50), exp
 event_tracer = Monitor.save_event_tracer()
 run_time = model['Sink'].last_arrival
 
-# 가동률
-print('#' * 80)
-# Process
-u, idle, working_time = cal_utilization(event_tracer, "Process1", "Process", finish_time=run_time)
-print("idle time of Process1: ", idle)
-print("total working time of Process1: ", working_time)
-print("utilization of Process1: ", u)
-
-# Server
-for i in range(server_num):
-    u, _, _ = cal_utilization(event_tracer, 'Process1_{0}'.format(i), type="SubProcess", finish_time=run_time)
-    print("utilization of Server {0}: ".format(i), u)
-
-# Lead Time
-print("average lead time: ", cal_leadtime(event_tracer, finish_time=run_time))
-
-# WIP
-print("WIP of entire model: ", np.mean(cal_wip(event_tracer)))
+# # 가동률
+# print('#' * 80)
+# # Process
+# u, idle, working_time = cal_utilization(event_tracer, "Process1", "Process", finish_time=run_time)
+# print("idle time of Process1: ", idle)
+# print("total working time of Process1: ", working_time)
+# print("utilization of Process1: ", u)
+#
+# # Server
+# for i in range(server_num):
+#     u, _, _ = cal_utilization(event_tracer, 'Process1_{0}'.format(i), type="SubProcess", finish_time=run_time)
+#     print("utilization of Server {0}: ".format(i), u)
+#
+# # Lead Time
+# print("average lead time: ", cal_leadtime(event_tracer, finish_time=run_time))
+#
+# # WIP
+# print("WIP of entire model: ", np.mean(cal_wip(event_tracer)))
 

@@ -1,26 +1,25 @@
-import simpy
-import os
-import random
-import time
+import simpy, os, random
 import pandas as pd
 import numpy as np
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 
 save_path = '../result'
 if not os.path.exists(save_path):
    os.makedirs(save_path)
 
-
+#region Part
 class Part(object):
     def __init__(self, name, data):
         # 해당 Part의 이름
         self.id = name
         # 작업 시간 정보
-        self.data = data
+        self.data = data # {'start_time' : list(), 'process_time' : list(), 'process' : list()
         # 작업을 완료한 공정의 수
         self.step = 0
 
+#endregion
 
+#region Source
 class Source(object):
     def __init__(self, env, parts, model, monitor):
         self.env = env
@@ -35,15 +34,15 @@ class Source(object):
         while True:
             part = self.parts.pop(0)  # Part 가져오기
 
-            IAT = part.data[(0, 'start_time')] - self.env.now  # 블록 시작시간에 맞춰 timeout
+            IAT = part.data['start_time'][0] - self.env.now  # 블록 시작시간에 맞춰 timeout
             if IAT > 0:
-                yield self.env.timeout(part.data[(0, 'start_time')] - self.env.now)
+                yield self.env.timeout(part.data['start_time'][0] - self.env.now)
 
             # record: part_created
             self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Part Created")
 
             # next process
-            next_process = part.data[(part.step, 'process')]  # 첫 번째 Process
+            next_process = part.data['process'][0] # 첫 번째 Process
             self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Source to Process")
             self.model[next_process].buffer_to_machine.put(part)
 
@@ -51,7 +50,9 @@ class Source(object):
                 print("all parts are sent at : ", self.env.now)
                 break
 
+#endregion
 
+#region Process
 class Process(object):
     def __init__(self, env, name, machine_num, model, monitor, process_time=None, capacity=float('inf'),
                  routing_logic='cyclic', priority=None, capa_to_machine=float('inf'), capa_to_process=float('inf'),
@@ -126,7 +127,7 @@ class Process(object):
 
             # next process
             step = 1
-            next_process_name = part.data[(part.step + step, 'process')]
+            next_process_name = part.data['process'][part.step + step]
             next_process = self.model[next_process_name]
             if next_process.__class__.__name__ == 'Process':
                 # buffer's capacity of next process is full -> have to delay
@@ -192,7 +193,7 @@ class Machine(object):
             self.working = True
             # process_time
             if self.process_time == None:  # part에 process_time이 미리 주어지는 경우
-                proc_time = part.data[(part.step, "process_time")]
+                proc_time = part.data['process_time'][part.step]
             else:  # service time이 정해진 경우 --> 1) fixed time / 2) Stochastic-time
                 proc_time = self.process_time if type(self.process_time) == float else self.process_time()
             self.planned_proc_time = proc_time
@@ -250,51 +251,6 @@ class Machine(object):
             return
 
 
-class Sink(object):
-    def __init__(self, env, monitor):
-        self.env = env
-        self.name = 'Sink'
-        self.monitor = monitor
-
-        self.parts_rec = 0
-        self.last_arrival = 0.0
-
-    def put(self, part):
-        self.parts_rec += 1
-        self.last_arrival = self.env.now
-        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Part Completed")
-
-
-class Monitor(object):
-    def __init__(self, filepath):
-        self.filepath = filepath  ## Event tracer 저장 경로
-
-        self.time = list()
-        self.event = list()
-        self.part = list()
-        self.process_name = list()
-        self.machine_name = list()
-
-    def record(self, time, process, machine, part_id=None, event=None):
-        self.time.append(time)
-        self.event.append(event)
-        self.part.append(part_id)
-        self.process_name.append(process)
-        self.machine_name.append(machine)
-
-    def save_event_tracer(self):
-        event_tracer = pd.DataFrame(columns=['Time', 'Event', 'Part', 'Process', 'Machine'])
-        event_tracer['Time'] = self.time
-        event_tracer['Event'] = self.event
-        event_tracer['Part'] = self.part
-        event_tracer['Process'] = self.process_name
-        event_tracer['Machine'] = self.machine_name
-
-        event_tracer.to_csv(self.filepath)
-
-        return event_tracer
-
-
 class Routing(object):
     def __init__(self, priority=None):
         self.idx_priority = np.array(priority)
@@ -326,3 +282,56 @@ class Routing(object):
                 idx_possible = i
                 break
         return idx_possible
+
+#endregion
+
+#region Sink
+class Sink(object):
+    def __init__(self, env, monitor):
+        self.env = env
+        self.name = 'Sink'
+        self.monitor = monitor
+
+        self.parts_rec = 0
+        self.last_arrival = 0.0
+
+    def put(self, part):
+        self.parts_rec += 1
+        self.last_arrival = self.env.now
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Part Completed")
+
+#endregion
+
+#region Monitor
+class Monitor(object):
+    def __init__(self, filepath):
+        self.filepath = filepath  ## Event tracer 저장 경로
+
+        self.time = list()
+        self.event = list()
+        self.part = list()
+        self.process_name = list()
+        self.machine_name = list()
+
+    def record(self, time, process, machine, part_id=None, event=None):
+        self.time.append(time)
+        self.event.append(event)
+        self.part.append(part_id)
+        self.process_name.append(process)
+        self.machine_name.append(machine)
+
+    def save_event_tracer(self):
+        event_tracer = pd.DataFrame(columns=['Time', 'Event', 'Part', 'Process', 'Machine'])
+        event_tracer['Time'] = self.time
+        event_tracer['Event'] = self.event
+        event_tracer['Part'] = self.part
+        event_tracer['Process'] = self.process_name
+        event_tracer['Machine'] = self.machine_name
+
+        event_tracer.to_csv(self.filepath)
+
+        return event_tracer
+
+#endregion
+
+
