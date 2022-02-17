@@ -12,8 +12,8 @@ class Part(object):
     def __init__(self, name, data):
         # 해당 Part의 이름
         self.id = name
-        # 작업 시간 정보
-        self.data = data # {'start_time' : list(), 'process_time' : list(), 'process' : list()
+        # 작업 정보, {'start_time' : list(), 'process_time' : list(), 'process' : list()}
+        self.data = data
         # 작업을 완료한 공정의 수
         self.step = 0
 
