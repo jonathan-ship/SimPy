@@ -45,14 +45,21 @@ for i in range(blocks):
 
 # Simulation Modeling
 env = simpy.Environment()
-model = {}  # process_dict
+
 process_time = {"Process1": [5.0]}  # server에 할당할 process time
 
 # Monitor
 filepath = '../result/event_log_DD1_1.csv'
-Monitor = Monitor(filepath)
+monitor = Monitor(filepath)
 
-Source = Source(env, parts, model, Monitor)
+# {Process name : Process class (Modeled), ... }
+model = {}
+
+# Source
+source = Source(env, parts, model, monitor)
+
+# Sink
+model['Sink'] = Sink(env, monitor)
 
 for i in range(len(process_list) + 1):
     if i == len(process_list):
