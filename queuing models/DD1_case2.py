@@ -60,7 +60,7 @@ source = Source(env, parts, model, monitor)
 # Sink
 model['Sink'] = Sink(env, monitor)
 
-for i in range(len(process_list) + 1):
+for i in range(len(process_list)):
     model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
                                                 process_time=process_time)
 
