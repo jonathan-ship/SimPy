@@ -61,11 +61,8 @@ source = Source(env, parts, model, monitor)
 model['Sink'] = Sink(env, monitor)
 
 for i in range(len(process_list) + 1):
-    if i == len(process_list):
-        model['Sink'] = Sink(env, Monitor)
-    else:
-        model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
-                                                    process_time=process_time)
+    model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
+                                                process_time=process_time)
 
 start_sim = time.time()
 env.run(until=run_time)
