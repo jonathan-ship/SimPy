@@ -52,17 +52,20 @@ filepath = '../result/event_log_DD1_1.csv'
 monitor = Monitor(filepath)
 
 # {Process name : Process class (Modeled), ... }
-model = {}
+process_dict = {}
 
 # Source
-source = Source(env, parts, model, monitor)
+source = Source(env, parts, process_dict, monitor)
 
 # Sink
-model['Sink'] = Sink(env, monitor)
+process_dict['Sink'] = Sink(env, monitor)
 
-for i in range(len(process_list)):
-    model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
-                                                process_time=process_time)
+# Process
+process_dict['Process1'] = Process(env, 'Process1', machine_num=1, model=process_dict, monitor=monitor)
+
+# for i in range(len(process_list)):
+#     model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
+#                                                 process_time=process_time)
 
 start_sim = time.time()
 env.run(until=run_time)
