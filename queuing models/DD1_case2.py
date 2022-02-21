@@ -42,11 +42,10 @@ process_list = ["Process1"]
 parts = list()
 for i in range(blocks):
     parts.append(Part(i, {'start_time': [10*i, None], 'process_time': [None, None], 'process': ['Process1', 'Sink']}))
+process_time = {"Process1": [5.0]}  # server에 할당할 process time
 
 # Simulation Modeling
 env = simpy.Environment()
-
-process_time = {"Process1": [5.0]}  # server에 할당할 process time
 
 # Monitor
 filepath = '../result/event_log_DD1_1.csv'
