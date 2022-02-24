@@ -40,21 +40,20 @@ for i in range(blocks):
 
 # Simulation Modeling
 env = simpy.Environment()
-model = {}  # process_dict
+process_dict = {}  # process_dict
 
 # Monitor
 filepath = '../result/event_log_DD1_1.csv'
-Monitor = Monitor(filepath)
+monitor = Monitor(filepath)
 
 # Source class
-Source = Source(env, parts, model, Monitor)
+source = Source(env, parts, process_dict, Monitor)
 
-# Sink and Process class
-for i in range(len(process_list) + 1):
-    if i == len(process_list):
-        model['Sink'] = Sink(env, Monitor)
-    else:
-        model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor)
+process_dict['Sink'] = Sink(env, monitor)
+
+# Process class
+for i in range(len(process_list)):
+    process_dict['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, process_dict, monitor)
 
 start_sim = time.time()
 env.run(until=run_time)

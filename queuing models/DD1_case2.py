@@ -61,7 +61,7 @@ source = Source(env, parts, process_dict, monitor)
 process_dict['Sink'] = Sink(env, monitor)
 
 # Process
-process_dict['Process1'] = Process(env, 'Process1', machine_num=1, model=process_dict, monitor=monitor)
+process_dict['Process1'] = Process(env, 'Process1', machine_num=1, model=process_dict, monitor=monitor, process_time=process_time)
 
 # for i in range(len(process_list)):
 #     model['Process{0}'.format(i + 1)] = Process(env, 'Process{0}'.format(i + 1), server_num, model, Monitor,
