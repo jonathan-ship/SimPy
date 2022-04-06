@@ -8,7 +8,7 @@ if not os.path.exists(save_path):
    os.makedirs(save_path)
 
 
-#region Work
+#region Operation
 class Operation(object):
     def __init__(self, name, time, proc_list):
         # 해당 operation의 이름
@@ -17,6 +17,12 @@ class Operation(object):
         self.time = time
         # 해당 operation이 가능한 process의 list
         self.proc_list = proc_list
+
+    def get_time(self):
+        if type(self.time) is str:
+            return eval('np.random.'+self.time)
+        else:
+            return self.time
 #endregion
 
 
@@ -36,7 +42,7 @@ class Part(object):
 
 #region Source
 class Source(object):
-    def __init__(self, env, name, model, monitor, data=None, jobtype=None, IAT=0):
+    def __init__(self, env, name, model, monitor, data=None, jobtype=None, IAT='expon(1)', num_parts=float('inf')):
         self.env = env
         self.name = name
         self.model = model
@@ -44,7 +50,9 @@ class Source(object):
         self.data = data
         self.jobtype = jobtype
         self.IAT = IAT
+        self.num_parts = num_parts
 
+        self.rec = 0
         self.action = env.process(self.run())
 
     def run(self):
@@ -71,7 +79,7 @@ class Source(object):
 
         else:
             i = 0
-            while True:
+            while self.rec < self.num_parts:
                 part = Part(self.name+'_'+str(i), self.jobtype)
 
                 # record: part_created
@@ -81,8 +89,10 @@ class Source(object):
                 # next process
                 self.model['Routing'].queue.put(part)  # 첫 번째 Process
                 self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Routing Start")
-                yield self.env.timeout(self.IAT)
+                IAT = eval('np.random.'+self.IAT)
+                yield self.env.timeout(IAT)
                 i += 1
+                self.rec += 1
 #endregion
 
 
@@ -111,49 +121,58 @@ class Process(object):
             self.out_part = simpy.FilterStore(env, capacity=out_buffer)
         self.machines = simpy.Store(env, capacity=capacity)
 
+        self.run_event = simpy.Event(env)
         # get run functions in class
         env.process(self.run())
 
-    # run function
     def run(self):
         if self.out_part is None:
-            # out-buffer의 capacity가 0일 때
             while True:
-                yield self.machines.put('using')
-                put_None = self.in_part.put(None)
-                if len(self.in_part.put_queue) != 0:
-                    self.in_part.put_queue.pop(-1)
-                    self.in_part.put_queue.insert(0, put_None)
-                part = yield self.in_part.get(lambda x: x is not None)
-                proc_time = part.requirements[part.step].time
-                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process Start")
-                yield self.env.timeout(proc_time)
-                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process Finish")
-                self.util_time += proc_time
-
-                self.model['Routing'].queue.put(part)
-                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Routing Start")
+                yield self.run_event
+                self.env.process(self.work_without_outbuffer())
         else:
-            # out-buffer의 capacity가 0이 아닐 때
             while True:
-                yield self.machines.put('using')
-                put_None = self.in_part.put(None)
-                if len(self.in_part.put_queue) != 0:
-                    self.in_part.put_queue.pop(-1)
-                    self.in_part.put_queue.insert(0, put_None)
-                part = yield self.in_part.get(lambda x: x is not None)
-                proc_time = part.requirements[part.step].time
+                yield self.run_event
+                self.env.process(self.work_with_outbuffer())
 
-                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process Start")
-                yield self.env.timeout(proc_time)
-                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process Finish")
-                self.util_time += proc_time
+    # run function
+    def work_without_outbuffer(self):
+        yield self.machines.put('using')
+        put_None = self.in_part.put(None)
+        if len(self.in_part.put_queue) != 0:
+            self.in_part.put_queue.pop(-1)
+            self.in_part.put_queue.insert(0, put_None)
+        part = yield self.in_part.get(lambda x: x is not None)
+        operation = part.requirements[part.step]
+        proc_time = operation.get_time()
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event=operation.id+" Start")
+        yield self.env.timeout(proc_time)
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event=operation.id+" Finish")
+        self.util_time += proc_time
 
-                yield self.out_part.put(part)
-                yield self.model['Routing'].queue.put(part)
-                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Routing Start")
-                yield self.in_part.get(lambda x: x is None)
-                yield self.machines.get()
+        self.model['Routing'].queue.put(part)
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Routing Start")
+
+    def work_with_outbuffer(self):
+        yield self.run_event
+        yield self.machines.put('using')
+        put_None = self.in_part.put(None)
+        if len(self.in_part.put_queue) != 0:
+            self.in_part.put_queue.pop(-1)
+            self.in_part.put_queue.insert(0, put_None)
+        part = yield self.in_part.get(lambda x: x is not None)
+        operation = part.requirements[part.step]
+        proc_time = operation.get_time()
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event=operation.id+" Start")
+        yield self.env.timeout(proc_time)
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event=operation.id+" Finish")
+        self.util_time += proc_time
+
+        yield self.out_part.put(part)
+        yield self.model['Routing'].queue.put(part)
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Routing Start")
+        yield self.in_part.get(lambda x: x is None)
+        yield self.machines.get()
 #endregion
 
 
@@ -192,6 +211,8 @@ class Routing(object):
             if pre_proc.out_part is None:
                 self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Routing Finish")
                 yield next_proc.in_part.put(part)
+                next_proc.run_event.succeed()
+                next_proc.run_event = simpy.Event(self.env)
                 yield pre_proc.machines.get()
                 yield pre_proc.in_part.get(lambda x: x is None)
                 part.loc = next_proc.name
@@ -199,12 +220,16 @@ class Routing(object):
             else:
                 self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Routing Finish")
                 yield next_proc.in_part.put(part)
+                next_proc.run_event.succeed()
+                next_proc.run_event = simpy.Event(self.env)
                 yield pre_proc.out_part.get(lambda x: x.id == part.id)
                 part.loc = next_proc.name
                 self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Part transferred")
         else:
             self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Routing Finish")
             yield next_proc.in_part.put(part)
+            next_proc.run_event.succeed()
+            next_proc.run_event = simpy.Event(self.env)
             part.loc = next_proc.name
             self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Part transferred")
 
