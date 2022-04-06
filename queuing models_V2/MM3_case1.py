@@ -22,8 +22,15 @@ model['Sink'] = Sink(env, monitor)
 jobtype1 = [operation['Ops1-1']]
 
 
-source = Source(env, 'Source_jobtype1', model, monitor, jobtype=jobtype1, IAT='exponential(60)')
+source = Source(env, 'Source_jobtype1', model, monitor, jobtype=jobtype1, IAT='exponential(20)')
 
 env.run(until=100000)
 
 monitor.save_event_tracer()
+
+
+print('#' * 80)
+print("Results of MM3 simulation")
+
+print("Makespan : ", model['Sink'].last_arrival)
+print("Makepart : ", model['Sink'].parts_rec)

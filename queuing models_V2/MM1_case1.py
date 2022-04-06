@@ -27,3 +27,9 @@ source = Source(env, 'Source_jobtype1', model, monitor, jobtype=jobtype1, IAT='e
 env.run(until=100000)
 
 monitor.save_event_tracer()
+
+print('#' * 80)
+print("Results of MM1 simulation")
+
+print("Makespan : ", model['Sink'].last_arrival)
+print("Makepart : ", model['Sink'].parts_rec)
