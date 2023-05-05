@@ -24,11 +24,15 @@ class Source:
         while True:
             self.part_id += 1
             part = Part(self.part_id, enter_time=self.env.now)
-            self.model['process'].store.put(part)
-            print(part.id, 'is created at', env.now)
+            print(part.id, 'is created at', self.env.now)
+            yield self.env.process(self.to_next_process(part))
 
             IAT = self.IAT
             yield self.env.timeout(IAT)
+
+    def to_next_process(self, part):
+        yield self.model['process'].store.put(part)
+
 
 
 class Process:
@@ -51,14 +55,14 @@ class Process:
 
     def servicing(self, part, req):
         setup_time = self.setup_time
-        print(part.id, 'starts setup for', self.name, 'at', env.now)
+        print(part.id, 'starts setup for', self.name, 'at', self.env.now)
         yield self.env.timeout(setup_time)
-        print(part.id, 'finishes setup for', self.name, 'at', env.now)
+        print(part.id, 'finishes setup for', self.name, 'at', self.env.now)
 
         service_time = self.service_time
-        print(part.id, 'starts service for', self.name, 'at', env.now)
+        print(part.id, 'starts service for', self.name, 'at', self.env.now)
         yield self.env.timeout(service_time)
-        print(part.id, 'finishes service for', self.name, 'at', env.now)
+        print(part.id, 'finishes service for', self.name, 'at', self.env.now)
 
         self.env.process(self.to_next_process(part, req))
 
@@ -79,7 +83,7 @@ class Sink:
     def processing(self):
         while True:
             part = yield self.store.get()
-            print(part.id, 'finishes at', env.now)
+            print(part.id, 'finishes at', self.env.now)
             self.part_count += 1
 
 

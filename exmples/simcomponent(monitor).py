@@ -24,11 +24,15 @@ class Source:
         while True:
             self.part_id += 1
             part = Part(self.part_id)
-            self.monitor.record(time=env.now, part=part.id, process=self.name, event='part created')
-            self.model[part.process_list[part.step]].store.put(part)
+            self.monitor.record(time=self.env.now, part=part.id, process=self.name, event='part created')
+            yield self.env.process(self.to_next_process(part))
 
             IAT = self.IAT
             yield self.env.timeout(IAT)
+
+    def to_next_process(self,part):
+        yield self.model[part.process_list[part.step]].store.put(part)
+
 
 
 class Process:
@@ -54,14 +58,14 @@ class Process:
     def servicing(self, part, machine):
         setup_time = self.setup_time
 
-        self.monitor.record(time=env.now, part=part.id, process=self.name, event='setup start', resource=machine)
+        self.monitor.record(time=self.env.now, part=part.id, process=self.name, event='setup start', resource=machine)
         yield self.env.timeout(setup_time)
-        self.monitor.record(time=env.now, part=part.id, process=self.name, event='setup finish', resource=machine)
+        self.monitor.record(time=self.env.now, part=part.id, process=self.name, event='setup finish', resource=machine)
 
         service_time = self.service_time
-        self.monitor.record(time=env.now, part=part.id, process=self.name, event='service start', resource=machine)
+        self.monitor.record(time=self.env.now, part=part.id, process=self.name, event='service start', resource=machine)
         yield self.env.timeout(service_time)
-        self.monitor.record(time=env.now, part=part.id, process=self.name, event='service finish', resource=machine)
+        self.monitor.record(time=self.env.now, part=part.id, process=self.name, event='service finish', resource=machine)
 
         self.env.process(self.to_next_process(part, machine))
 
@@ -83,9 +87,7 @@ class Sink:
     def processing(self):
         while True:
             part = yield self.store.get()
-            self.monitor.record(time=env.now, part=part.id, process=self.name, event='part finish')
-
-
+            self.monitor.record(time=self.env.now, part=part.id, process=self.name, event='part finish')
 class Monitor:
     def __init__(self, filepath):
         self.filepath = filepath
@@ -111,7 +113,6 @@ class Monitor:
         event_tracer['Resource'] = self.resource
 
         event_tracer.to_csv(self.filepath)
-
         return event_tracer
 
 
