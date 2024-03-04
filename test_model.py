@@ -1,4 +1,4 @@
-from SimComponents_V2 import *
+from SimComponents import *
 import simpy
 
 filepath = './result/event_log_test.csv'

@@ -7,285 +7,274 @@ save_path = '../result'
 if not os.path.exists(save_path):
    os.makedirs(save_path)
 
-#region Part
-class Part(object):
-    def __init__(self, name, data):
-        # 해당 Part의 이름
-        self.id = name
-        # 작업 정보, {'start_time' : list(), 'process_time' : list(), 'process' : list()}
-        self.data = data
-        # 작업을 완료한 공정의 수
-        self.step = 0
 
+#region Operation
+class Operation(object):
+    def __init__(self, name, time, proc_list):
+        # 해당 operation의 이름
+        self.id = name
+        # 해당 operation의 시간
+        self.time = time
+        # 해당 operation이 가능한 process의 list
+        self.proc_list = proc_list
+
+    # Operation의 시간을 호출하기 위한 함수
+    def get_time(self):
+        if type(self.time) is str:
+            return eval('np.random.'+self.time)
+        else:
+            return self.time
 #endregion
 
+
+#region Part
+class Part(object):
+    def __init__(self, name, requirements):
+        # 해당 Part의 이름
+        self.id = name
+        # 작업 정보, production requirements
+        self.requirements = requirements
+        # 작업을 완료한 공정의 수
+        self.step = -1
+        # Part의 현재 위치
+        self.loc = None
+#endregion
+
+
 #region Source
-
-
 class Source(object):
-    def __init__(self, env, parts, model, monitor):
+    def __init__(self, env, name, model, monitor, data=None, jobtype=None, IAT='expon(1)', num_parts=float('inf')):
         self.env = env
-        self.name = 'Source'
-        self.parts = parts  ## Part 클래스로 모델링 된 Part들이 list 형태로 저장
+        self.name = name # 해당 Source의 이름
         self.model = model
         self.monitor = monitor
+        self.data = data # Source가 생성하는 Part의 데이터(입력값 없을 시 jobtype을 통한 Part 생성)
+        self.jobtype = jobtype # Source가 생산하는 Part의 jobtype(입력값 없을 시 data를 통한 Part 생성)
+        self.IAT = IAT # Source가 생성하는 Part의 IAT(jobtype을 통한 Part 생성)
+        self.num_parts = num_parts # Source가 생성하는 Part의 갯수(jobtype을 통한 Part 생성)
 
+        self.rec = 0 # 생성된 Part의 갯수를 기록하는 변수
         self.action = env.process(self.run())
 
     def run(self):
-        while True:
-            part = self.parts.pop(0)  # Part 가져오기
+        # data를 통한 Part 생성
+        if self.data is not None:
+            while True:
+                part_data = self.data.pop(0)[0]  # Part 가져오기
 
-            IAT = part.data['start_time'][0] - self.env.now  # 블록 시작시간에 맞춰 timeout
-            if IAT > 0:
-                yield self.env.timeout(part.data['start_time'][0] - self.env.now)
+                part = part_data[0]
+                IAT = part_data[1] - self.env.now  # Part 시작시간에 맞춰 timeout
+                if IAT > 0:
+                    yield self.env.timeout(IAT)
 
-            # record: part_created
-            self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Part Created")
+                # record: part_created
+                part.loc = self.name
+                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Part Created")
 
-            # next process
-            next_process = part.data['process'][0] # 첫 번째 Process
-            self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Source to Process")
-            self.model[next_process].buffer_to_machine.put(part)
+                # Routing Start
+                self.model['Routing'].queue.put(part)  # Routing class로 put
+                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Routing Start")
 
-            if len(self.parts) == 0:  # 모든 블록의 일이 끝나면 Source에서의 활동 종료
-                print("all parts are sent at : ", self.env.now)
-                break
+                if len(self.data) == 0:  # 모든 블록의 일이 끝나면 Source에서의 활동 종료
+                    print("all parts are sent at : ", self.env.now)
+                    break
+        # jobtype을 통한 Part 생성
+        else:
+            while self.rec < self.num_parts:
+                part = Part(self.name+'_'+str(self.rec), self.jobtype)
 
+                # record: part_created
+                part.loc = self.name
+                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Part Created")
+
+                # Routing start
+                self.model['Routing'].queue.put(part) # Routing class로 put
+                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Routing Start")
+                if type(self.IAT) is str:
+                    IAT = eval('np.random.' + self.IAT)
+                else:
+                    IAT = self.IAT
+                yield self.env.timeout(IAT)
+                self.rec += 1
 #endregion
+
 
 #region Process
 class Process(object):
-    def __init__(self, env, name, machine_num, model, monitor, process_time=None, capacity=float('inf'),
-                 routing_logic='cyclic', priority=None, capa_to_machine=float('inf'), capa_to_process=float('inf'),
-                 MTTR=None, MTTF=None, initial_broken_delay=None, delay_time=None):
+    def __init__(self, env, name, model, monitor, capacity=float('inf'), priority=1, in_buffer=float('inf'),
+                 out_buffer=float('inf')):
         # input data
         self.env = env
-        self.name = name
+        self.name = name # 해당 프로세스의 이름
         self.model = model
         self.monitor = monitor
-        self.capa = capacity
-        self.machine_num = machine_num
-        self.routing_logic = routing_logic
-        self.process_time = process_time[self.name] if process_time is not None else [None for _ in range(machine_num)]
-        self.priority = priority[self.name] if priority is not None else [1 for _ in range(machine_num)]
-        self.MTTR = MTTR[self.name] if MTTR is not None else [None for _ in range(machine_num)]
-        self.MTTF = MTTF[self.name] if MTTF is not None else [None for _ in range(machine_num)]
-        self.initial_broken_delay = initial_broken_delay[self.name] if initial_broken_delay is not None else [None for _ in range(machine_num)]
-        self.delay_time = delay_time[name] if delay_time is not None else None
+        self.capa = capacity # 해당 프로세스의 동시 작업 한도
+        self.priority = priority # 해당 프로세스의 우선 순위
 
         # variable defined in class
         self.parts_sent = 0
-        self.parts_sent_to_machine = 0
-        self.machine_idx = 0
-        self.len_of_server = []
-        self.waiting_machine = OrderedDict()
-        self.waiting_pre_process = OrderedDict()
+        self.util_time = 0.0 # 프로세스의 가동 시간
 
         # buffer and machine
-        self.buffer_to_machine = simpy.Store(env, capacity=capa_to_machine)
-        self.buffer_to_process = simpy.Store(env, capacity=capa_to_process)
-        self.machine = [Machine(env, '{0}_{1}'.format(self.name, i), self.name, process_time=self.process_time[i],
-                                priority=self.priority[i], out=self.buffer_to_process,
-                                waiting=self.waiting_machine, monitor=monitor, MTTF=self.MTTF[i], MTTR=self.MTTR[i],
-                                initial_broken_delay=self.initial_broken_delay[i]) for i in range(machine_num)]
+        self.in_part = simpy.FilterStore(env, capacity=in_buffer+capacity)
 
-
-        # get run functions in class
-        env.process(self.to_machine())
-        env.process(self.to_process())
-
-    # In-Buffer / Put Part into its Machine
-    def to_machine(self):
-        while True:
-            routing = Routing(priority=self.priority)
-            if self.delay_time is not None:
-                delaying_time = self.delay_time if type(self.delay_time) == float else self.delay_time()
-                yield self.env.timeout(delaying_time)
-            part = yield self.buffer_to_machine.get()
-            self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process In")
-
-            # Rouring logic에 맞추어 다음 machine index 선택
-            if self.routing_logic == 'priority':
-                self.machine_idx = routing.priority(self.machine)
-            elif self.routing_logic == 'first_possible':
-                self.machine_idx = routing.first_possible(self.machine)
-            else:
-                self.machine_idx = 0 if (self.parts_sent_to_machine == 0) or (
-                            self.machine_idx == self.machine_num - 1) else self.machine_idx + 1
-
-            # 기계로 Part 할당
-            self.machine[self.machine_idx].machine.put(part)
-            self.parts_sent_to_machine += 1
-
-            # finish delaying of pre-process
-            if (len(self.buffer_to_machine.items) < self.buffer_to_machine.capacity) and (len(self.waiting_pre_process) > 0):
-                self.waiting_pre_process.popitem(last=False)[1].succeed()  # delay = (part_id, event)
-
-    # Out-Buffer / Put Part into Next Process
-    def to_process(self):
-        while True:
-            part = yield self.buffer_to_process.get()
-
-            # next process
-            step = 1
-            next_process_name = part.data['process'][part.step + step]
-            next_process = self.model[next_process_name]
-            if next_process.__class__.__name__ == 'Process':
-                # buffer's capacity of next process is full -> have to delay
-                if len(next_process.buffer_to_machine.items) == next_process.buffer_to_machine.capacity:
-                    next_process.waiting_pre_process[part.id] = self.env.event()
-                    self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Delay for Next Process")
-                    yield next_process.waiting_pre_process[part.id]
-                    self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process to Process")
-
-                else:
-                    next_process.buffer_to_machine.put(part)
-                    self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process to Process")
-            else:  # next_process == Sink
-                next_process.put(part)
-                self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Process to Sink")
-
-            part.step += step
-            self.parts_sent += 1
-
-            if (len(self.buffer_to_process.items) < self.buffer_to_process.capacity) and (len(self.waiting_machine) > 0):
-                self.waiting_machine.popitem(last=False)[1].succeed()  # delay = (part_id, event)
-
-
-class Machine(object):
-    def __init__(self, env, name, process_name, process_time, priority, out, waiting, monitor, MTTF, MTTR,
-                 initial_broken_delay):
-        # input data
-        self.env = env
-        self.name = name
-        self.process_name = process_name
-        self.process_time = process_time
-        self.priority = priority
-        self.out = out
-        self.waiting = waiting
-        self.monitor = monitor
-        self.MTTR = MTTR
-        self.MTTF = MTTF
-        self.initial_broken_delay = initial_broken_delay
-
-        # variable defined in class
-        self.machine = simpy.Store(env)
-        self.working_start = 0.0
-        self.total_time = 0.0
-        self.total_working_time = 0.0
-        self.working = False  # whether machine's worked(True) or idled(False)
-        self.broken = False  # whether machine is broken or not
-        self.unbroken_start = 0.0
-        self.planned_proc_time = 0.0
-
-        # broke and re-running
-        self.residual_time = 0.0
-        self.broken_start = 0.0
-        if self.MTTF is not None:
-            mttf_time = self.MTTF if type(self.MTTF) == float else self.MTTF()
-            self.broken_start = self.unbroken_start + mttf_time
-        # get run functions in class
-        self.action = env.process(self.work())
-
-    def work(self):
-        while True:
-            self.broken = True
-            part = yield self.machine.get()
-            self.working = True
-            # process_time
-            if self.process_time == None:  # part에 process_time이 미리 주어지는 경우
-                proc_time = part.data['process_time'][part.step]
-            else:  # service time이 정해진 경우 --> 1) fixed time / 2) Stochastic-time
-                proc_time = self.process_time if type(self.process_time) == float else self.process_time()
-            self.planned_proc_time = proc_time
-
-            while proc_time:
-                if self.MTTF is not None:
-                    self.env.process(self.break_machine())
-                try:
-                    self.broken = False
-                    ## working start
-                    self.monitor.record(self.env.now, self.process_name, self.name, part_id=part.id, event="Work Start")
-                    self.working_start = self.env.now
-                    yield self.env.timeout(proc_time)
-
-                    ## working finish
-                    self.monitor.record(self.env.now, self.process_name, self.name, part_id=part.id, event="Work Finish")
-                    self.total_working_time += self.env.now - self.working_start
-                    self.broken = True
-                    proc_time = 0.0
-
-                except simpy.Interrupt:
-                    self.broken = True
-                    self.monitor.record(self.env.now, self.process_name, self.name, part_id=part.id,
-                                        event="Machine Broken")
-                    print('{0} is broken at '.format(self.name), self.env.now)
-                    proc_time -= self.env.now - self.working_start
-                    if self.MTTR is not None:
-                        repair_time = self.MTTR if type(self.MTTR) == float else self.MTTR()
-                        yield self.env.timeout(repair_time)
-                        self.unbroken_start = self.env.now
-                    self.monitor.record(self.env.now, self.process_name, self.name, part_id=part.id,
-                                        event="machine_rerunning")
-                    print(self.name, 'is solved at ', self.env.now)
-                    self.broken = False
-
-                    mttf_time = self.MTTF if type(self.MTTF) == float else self.MTTF()
-                    self.broken_start = self.unbroken_start + mttf_time
-
-            self.working = False
-
-            # Part transfer to Out Buffer
-            self.out.put(part)
-
-            self.total_time += self.env.now - self.working_start
-
-    def break_machine(self):
-        if (self.working_start == 0.0) and (self.initial_broken_delay is not None):
-            initial_delay = self.initial_broken_delay if type(self.initial_broken_delay) == float else self.initial_broken_delay()
-            yield self.env.timeout(initial_delay)
-        residual_time = self.broken_start - self.working_start
-        if (residual_time > 0) and (residual_time < self.planned_proc_time):
-            yield self.env.timeout(residual_time)
-            self.action.interrupt()
+        if out_buffer == 0:
+            self.out_part = None
         else:
-            return
+            self.out_part = simpy.FilterStore(env, capacity=out_buffer)
+        self.machines = simpy.Store(env, capacity=capacity)
 
+        # Part가 Process로 들어오는 것을 감지하기 위한 Event
+        self.run_event = simpy.Event(env)
+        # get run functions in class
+        env.process(self.run())
 
-class Routing(object):
-    def __init__(self, priority=None):
-        self.idx_priority = np.array(priority)
+    # run function
+    def run(self):
+        # out_buffer가 없는 경우
+        if self.out_part is None:
+            while True:
+                yield self.run_event
+                self.env.process(self.work_without_outbuffer())
+        # out_buffer가 있는 경우
+        else:
+            while True:
+                yield self.run_event
+                self.env.process(self.work_with_outbuffer())
 
-    def priority(self, server_list):
-        i = min(self.idx_priority)
-        idx = 0
-        while i <= max(self.idx_priority):
-            min_idx = np.argwhere(self.idx_priority == i)  # priority가 작은 숫자의 index부터 추출
-            idx_min_list = min_idx.flatten().tolist()
-            # 해당 index list에서 machine이 idling인 index만 추출
-            idx_list = list(filter(lambda j: (server_list[j].working == False), idx_min_list))
-            if len(idx_list) > 0:  # 만약 priority가 높은 machine 중 idle 상태에 있는 machine이 존재한다면
-                idx = random.choice(idx_list)
-                break
-            else:  # 만약 idle 상태에 있는 machine이 존재하지 않는다면
-                if i == max(self.idx_priority):  # 그 중 모든 priority에 대해 machine이 가동중이라면
-                    idx = random.choice([j for j in range(len(self.idx_priority))])  # 그냥 무작위 배정
-                    # idx = None
-                    break
-                else:
-                    i += 1  # 다음 priority에 대하여 따져봄
-        return idx
+    # without out_buffer
+    def work_without_outbuffer(self):
+        yield self.machines.put('using')
+        put_None = self.in_part.put(None)
+        if len(self.in_part.put_queue) != 0:
+            self.in_part.put_queue.pop(-1)
+            self.in_part.put_queue.insert(0, put_None)
+        part = yield self.in_part.get(lambda x: x is not None)
+        operation = part.requirements[part.step]
+        proc_time = operation.get_time()
 
-    def first_possible(self, server_list):
-        idx_possible = random.choice([j for j in range(len(server_list))])  # random index로 초기화 - 모든 서버가 가동중일 때, 서버에 random하게 파트 할당
-        for i in range(len(server_list)):
-            if server_list[i].working is False:  # 만약 미가동중인 server가 존재할 경우, 해당 서버에 part 할당
-                idx_possible = i
-                break
-        return idx_possible
+        # Process start and finish
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event=operation.id+" Start")
+        yield self.env.timeout(proc_time)
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event=operation.id+" Finish")
+        self.util_time += proc_time
 
+        # Routing start
+        self.model['Routing'].queue.put(part)
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Routing Start")
+
+    # with out_buffer
+    def work_with_outbuffer(self):
+        yield self.machines.put('using')
+        put_None = self.in_part.put(None)
+        if len(self.in_part.put_queue) != 0:
+            self.in_part.put_queue.pop(-1)
+            self.in_part.put_queue.insert(0, put_None)
+        part = yield self.in_part.get(lambda x: x is not None)
+        operation = part.requirements[part.step]
+        proc_time = operation.get_time()
+
+        # Process start and finish
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event=operation.id+" Start")
+        yield self.env.timeout(proc_time)
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event=operation.id+" Finish")
+        self.util_time += proc_time
+
+        # Routing start
+        yield self.out_part.put(part)
+        yield self.model['Routing'].queue.put(part)
+        self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Routing Start")
+        yield self.in_part.get(lambda x: x is None)
+        yield self.machines.get()
 #endregion
+
+
+#region Routing
+class Routing(object):
+    def __init__(self, env, model, monitor):
+        self.env = env
+        self.name = 'Routing'
+        self.model = model
+        self.monitor = monitor
+
+        self.queue = simpy.Store(env)
+
+        env.process(self.run())
+
+    # run function
+    def run(self):
+        while True:
+            part = yield self.queue.get()
+            part.step += 1
+            if part.step < len(part.requirements):
+                # to routing function
+                self.env.process(self.least_util(part))
+            else:
+                # to Sink
+                self.env.process(self.put_sink(part))
+
+    # Routing(least utilized)
+    def least_util(self, part):
+        # Select least utilized proc
+        operation = part.requirements[part.step]
+        proc_list = [self.model[proc] for proc in operation.proc_list]
+        util_list = [proc.util_time / proc.capa for proc in proc_list]
+        idx = util_list.index(min(util_list))
+        next_proc = proc_list[idx]
+
+        # To next process
+        yield self.env.process(self.to_next_proc(part, next_proc))
+
+    # to next proc function
+    def to_next_proc(self, part, next_proc):
+        # Part의 위치가 임의의 Process인 경우
+        if part.loc in self.model.keys():
+            pre_proc = self.model[part.loc]
+            # Part의 현재 process가 without out_buffer인 경우
+            if pre_proc.out_part is None:
+                self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Routing Finish")
+                # to next process
+                yield next_proc.in_part.put(part)
+                next_proc.run_event.succeed()
+                next_proc.run_event = simpy.Event(self.env)
+                yield pre_proc.machines.get()
+                yield pre_proc.in_part.get(lambda x: x is None)
+                part.loc = next_proc.name
+                self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Part transferred")
+            # Part의 현재 process가 with out_buffer인 경우
+            else:
+                self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Routing Finish")
+                # to next process
+                yield next_proc.in_part.put(part)
+                next_proc.run_event.succeed()
+                next_proc.run_event = simpy.Event(self.env)
+                yield pre_proc.out_part.get(lambda x: x.id == part.id)
+                part.loc = next_proc.name
+                self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Part transferred")
+
+        # Part의 위치가 임의의 Source인 경우
+        else:
+            self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Routing Finish")
+            yield next_proc.in_part.put(part)
+            next_proc.run_event.succeed()
+            next_proc.run_event = simpy.Event(self.env)
+            part.loc = next_proc.name
+            self.monitor.record(self.env.now, next_proc.name, None, part_id=part.id, event="Part transferred")
+
+    def put_sink(self, part):
+        if part.loc in self.model.keys():
+            pre_proc = self.model[part.loc]
+            # Part의 현재 process가 without out_buffer인 경우
+            if pre_proc.out_part is None:
+                self.model['Sink'].put(part)
+                yield pre_proc.machines.get()
+                yield pre_proc.in_part.get(lambda x: x is None)
+            # Part의 현재 process가 with out_buffer인 경우
+            else:
+                self.model['Sink'].put(part)
+                yield pre_proc.out_part.get(lambda x: x.id == part.id)
+#endregion
+
 
 #region Sink
 class Sink(object):
@@ -294,15 +283,18 @@ class Sink(object):
         self.name = 'Sink'
         self.monitor = monitor
 
+        # Sink를 통해 끝마친 Part의 갯수
         self.parts_rec = 0
+        # 마지막 Part가 도착한 시간
         self.last_arrival = 0.0
 
+    # put function
     def put(self, part):
         self.parts_rec += 1
         self.last_arrival = self.env.now
         self.monitor.record(self.env.now, self.name, None, part_id=part.id, event="Part Completed")
-
 #endregion
+
 
 #region Monitor
 class Monitor(object):
@@ -335,5 +327,3 @@ class Monitor(object):
         return event_tracer
 
 #endregion
-
-
