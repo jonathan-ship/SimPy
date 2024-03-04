@@ -7,8 +7,7 @@ SimPy is implemented in pure Python and has no dependencies. SimPy runs on Pytho
 ```Python
 $  pip  install  simpy
 ```
-## Installing from source[](https://simpy.readthedocs.io/en/latest/simpy_intro/installation.html#installing-from-source "Link to this heading")
-
+## Installing from source
 Alternatively, you can  [download SimPy](http://pypi.python.org/pypi/SimPy/)  and install it manually. Extract the archive, open a terminal window where you extracted SimPy and type:
 ## 3. Trouble shooting
 ## 4. Supporting
