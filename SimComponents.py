@@ -7,7 +7,6 @@ save_path = '../result'
 if not os.path.exists(save_path):
    os.makedirs(save_path)
 
-
 #region Operation
 class Operation(object):
     def __init__(self, name, time, proc_list):
@@ -39,7 +38,6 @@ class Part(object):
         # Part의 현재 위치
         self.loc = None
 #endregion
-
 
 #region Source
 class Source(object):
@@ -97,7 +95,6 @@ class Source(object):
                 yield self.env.timeout(IAT)
                 self.rec += 1
 #endregion
-
 
 #region Process
 class Process(object):
@@ -187,7 +184,6 @@ class Process(object):
         yield self.in_part.get(lambda x: x is None)
         yield self.machines.get()
 #endregion
-
 
 #region Routing
 class Routing(object):
