@@ -12,7 +12,7 @@ import scipy.stats as st
 import functools
 import time
 
-from SimComponents import Source, Sink, Process, Monitor, Part
+from SimComponent.SimComponents import Source, Sink, Process, Monitor, Part
 
 start_run = time.time()
 

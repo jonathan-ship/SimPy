@@ -7,7 +7,7 @@ import random
 from datetime import datetime
 from collections import OrderedDict
 
-from SimComponents import Source, Process, Sink, Monitor, Part
+from SimComponent.SimComponents import Source, Process, Sink, Monitor, Part
 from PostProcessing import cal_wip, cal_utilization, cal_throughput, cal_leadtime
 
 start_run = time.time()

@@ -5,10 +5,9 @@ Source IAT = 10
 Server service time: 10s
 '''
 import simpy
-import pandas as pd
 import time
 
-from SimComponents import Source, Sink, Process, Monitor, Part
+from SimComponent.SimComponents import Source, Sink, Process, Monitor, Part
 
 start_run = time.time()
 

@@ -4,7 +4,7 @@ import time
 import pandas as pd
 import scipy.stats as st
 
-from SimComponents import Source, Sink, Process, Monitor, Part
+from SimComponent.SimComponents import Source, Sink, Process, Monitor, Part
 
 # 코드 실행 시작 시각
 start_0 = time.time()

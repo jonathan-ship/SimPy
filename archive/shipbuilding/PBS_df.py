@@ -6,7 +6,7 @@ import simpy
 import time
 import functools
 
-from SimComponents import Source, Sink, Process, Monitor, Part
+from SimComponent.SimComponents import Source, Sink, Process, Monitor, Part
 
 # 코드 실행 시작 시각
 start_run = time.time()

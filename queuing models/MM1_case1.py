@@ -1,4 +1,4 @@
-from SimComponents import *
+from SimComponent.SimComponents import *
 import simpy
 import numpy as np
 import random
